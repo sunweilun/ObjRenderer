@@ -7,17 +7,24 @@
 
 #include <limits>
 #include <GL/glew.h>
-
+#include "ShaderUtils.h"
 #include "ObjRenderer.h"
+#include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
+
+#define BUFFER_OFFSET(i) ((char *)NULL + (i))
 
 GLuint ObjRenderer::colorTexID = 0;
 GLuint ObjRenderer::depthBufferID = 0;
 GLuint ObjRenderer::frameBufferID = 0;
-GLuint ObjRenderer::listID = 0;
+GLuint ObjRenderer::shaderProgID = 0;
+GLuint ObjRenderer::vertexBufferID = 0;
 GLuint ObjRenderer::renderSize = 800;
+GLuint ObjRenderer::nTriangles = 0;
+GLuint ObjRenderer::texCount = 0;
 bool ObjRenderer::flipNormals = true;
 bool ObjRenderer::faceNormals = false;
+
 std::vector<glm::vec3> ObjRenderer::vertices;
 
 inline glm::vec3 getVec(const float* data)
@@ -30,17 +37,23 @@ inline glm::vec3 getVec(const float* data)
 }
 
 void ObjRenderer::init()
-{
+{   
     int ac = 0;
     char** av;
     glutInit(&ac, av);
     glutInitWindowSize(renderSize, renderSize);
     glutCreateWindow("SketchRenderer");
     glewInit();
-    listID = glGenLists(1);
+    
+    
+    
     glutDisplayFunc(render);
     glutInitDisplayMode(GLUT_DEPTH | GLUT_SINGLE | GLUT_RGB);
     glClearColor(0, 0, 0, 0);
+    
+    shaderProgID = loadShaders("Shader/phong.vert", "Shader/phong.frag");
+    
+    
     
     glClampColor(GL_CLAMP_READ_COLOR, GL_FALSE);
     glClampColor(GL_CLAMP_VERTEX_COLOR, GL_FALSE);
@@ -69,9 +82,53 @@ void ObjRenderer::init()
     //Attach depth buffer to FBO
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBufferID);
     glutHideWindow();
+    
+    glGenBuffers(1, &vertexBufferID);
 }
 
-void ObjRenderer::load(const std::string& path)
+void ObjRenderer::makeTex(const std::string& shaderVarname, const cv::Mat& tex)
+{
+    GLuint textureID;
+
+    glGenTextures(1, &textureID);
+    
+    glActiveTexture(GL_TEXTURE0+texCount);
+
+    glBindTexture(GL_TEXTURE_2D, textureID);
+
+    glTexImage2D(GL_TEXTURE_2D, 0,GL_RGB, tex.cols, tex.rows, 1, 
+            GL_RGB, GL_UNSIGNED_BYTE, tex.data);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    
+    glGenerateMipmap(GL_TEXTURE_2D);
+    
+    glUniform1i(glGetUniformLocation(shaderProgID, shaderVarname.c_str()), texCount);
+    texCount++;
+}
+
+void ObjRenderer::loadEnvMap(const std::string& path)
+{
+    cv::Mat map = cv::imread(path);
+    // Create one OpenGL texture
+    
+    cv::flip(map, map, 0);
+    
+    cv::Mat map_diff, map_spec;
+    
+    cv::GaussianBlur(map, map_diff, 
+            cv::Size(int(map.cols*0.2)*2+1, int(map.rows*0.2)*2+1), 0, 0);
+    
+    cv::GaussianBlur(map, map_spec, 
+            cv::Size(int(map.cols*0.02)*2+1, int(map.rows*0.02)*2+1), 0, 0);
+    
+    makeTex("envmap_diff", map_diff);
+    makeTex("envmap_spec", map_spec);
+}
+
+void ObjRenderer::loadModel(const std::string& path)
 {
     std::string::size_type pos = path.rfind('/');
     std::string mtl_base_path = "";
@@ -113,75 +170,121 @@ void ObjRenderer::load(const std::string& path)
     float diagLen = glm::length(ub-lb);
     // find bound -- end
     
-    // compile render list -- begin
+    // make attribute buffers -- begin
     
-    glNewList(listID, GL_COMPILE);
-    glBegin(GL_TRIANGLES);
+    std::vector<Attribute> attributeData;
+    
     for(size_t shape_index=0; shape_index<shapes.size(); shape_index++)
     {
         const tinyobj::mesh_t& mesh = shapes[shape_index].mesh;
-        glm::vec3 normal;
+        Attribute attr;
+        
         for(size_t index=0; index < mesh.indices.size(); index++)
         {
             const unsigned vert_index = mesh.indices[index];
             
             if(index % 3 == 0)
             {
-                unsigned mat_id = mesh.material_ids[index / 3];
-                const tinyobj::material_t mat = materials[mat_id];
-                glm::vec3 color;
-                color.x = mat.diffuse[2];
-                color.y = mat.diffuse[1];
-                color.z = mat.diffuse[0];
-                glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (float*)&color);
                 
-                color.x = mat.ambient[2];
-                color.y = mat.ambient[1];
-                color.z = mat.ambient[0];
-                glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (float*)&color);
-                
-                color.x = mat.specular[2];
-                color.y = mat.specular[1];
-                color.z = mat.specular[0];
-                glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (float*)&color);
-                
-                glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, mat.shininess);
-                
-                if(faceNormals)
-                {
-                    unsigned i1 = mesh.indices[index];
-                    unsigned i2 = mesh.indices[index+1];
-                    unsigned i3 = mesh.indices[index+2];
-                    glm::vec3 v1 = getVec(&mesh.positions[i1*3]);
-                    glm::vec3 v2 = getVec(&mesh.positions[i2*3]);
-                    glm::vec3 v3 = getVec(&mesh.positions[i3*3]);
-                    normal = glm::normalize(glm::cross(v2-v1, v3-v2));
-                    if(flipNormals) 
-                        normal = -normal;
-                }
-            }
-            
-            if(!faceNormals)
-            {
-                normal = getVec(&mesh.normals[vert_index*3]);
-                normal.z = normal.x;
-                normal.x = mesh.normals[vert_index*3+2];
+                unsigned i1 = mesh.indices[index];
+                unsigned i2 = mesh.indices[index+1];
+                unsigned i3 = mesh.indices[index+2];
+                glm::vec3 v1 = getVec(&mesh.positions[i1*3]);
+                glm::vec3 v2 = getVec(&mesh.positions[i2*3]);
+                glm::vec3 v3 = getVec(&mesh.positions[i3*3]);
+                attr.normal = glm::normalize(glm::cross(v2-v1, v3-v2));
                 if(flipNormals) 
-                    normal = -normal;
+                    attr.normal = -attr.normal;
+                
+                if(materials.size())
+                {
+                    unsigned mat_id = mesh.material_ids[index / 3];
+                    const tinyobj::material_t mat = materials[mat_id];
+                    attr.kd.x = mat.diffuse[2];
+                    attr.kd.y = mat.diffuse[1];
+                    attr.kd.z = mat.diffuse[0];
+
+                    attr.ka.x = mat.ambient[2];
+                    attr.ka.y = mat.ambient[1];
+                    attr.ka.z = mat.ambient[0];
+
+                    attr.ks.x = mat.specular[2];
+                    attr.ks.y = mat.specular[1];
+                    attr.ks.z = mat.specular[0];
+
+                    attr.shiness = mat.shininess;
+                }
+                
             }
             
-            glNormal3fv((float*)&normal);
-            glTexCoord2fv(&mesh.texcoords[vert_index*2]);
+            if(!faceNormals && vert_index*3+2 < mesh.normals.size())
+            {
+                attr.normal = getVec(&mesh.normals[vert_index*3]);
+                attr.normal.z = attr.normal.x;
+                attr.normal.x = mesh.normals[vert_index*3+2];
+                if(flipNormals) 
+                    attr.normal = -attr.normal;
+            }
+            
+            if(vert_index*2+1 < mesh.texcoords.size())
+            {
+                attr.texCoord.x = mesh.texcoords[vert_index*2];
+                attr.texCoord.y = mesh.texcoords[vert_index*2+1];
+            }
+            
             glm::vec3 unit_pos;
             unit_pos = getVec(&mesh.positions[vert_index*3]);
             unit_pos = (unit_pos-center) * 2.0f / diagLen;
-            glVertex3fv((float*)&unit_pos);
+            attr.vertex = unit_pos;
+            attributeData.push_back(attr);
         }
     }
-    glEnd();
     
-    glEndList();
-    // compile render list -- end
+    nTriangles = attributeData.size() / 3;
+    
+    glBindBuffer(GL_ARRAY_BUFFER, vertexBufferID);
+    
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Attribute)*attributeData.size(), 
+            attributeData.data(), GL_STATIC_DRAW);
+    
+    GLuint loc;
+    
+    loc = glGetAttribLocation(shaderProgID, "vertex");
+    glEnableVertexAttribArray(loc);
+    glVertexAttribPointer(loc, 3, GL_FLOAT, GL_FALSE, 
+          sizeof(Attribute), BUFFER_OFFSET(offsetof(Attribute, vertex)));
+    
+    loc = glGetAttribLocation(shaderProgID, "normal");
+    glEnableVertexAttribArray(loc);
+    glVertexAttribPointer(loc, 3, GL_FLOAT, GL_FALSE, 
+          sizeof(Attribute), BUFFER_OFFSET(offsetof(Attribute, normal)));
+    
+    loc = glGetAttribLocation(shaderProgID, "texCoord");
+    glEnableVertexAttribArray(loc);
+    glVertexAttribPointer(loc, 2, GL_FLOAT, GL_FALSE, 
+          sizeof(Attribute), BUFFER_OFFSET(offsetof(Attribute, texCoord)));
+    
+    loc = glGetAttribLocation(shaderProgID, "ambient");
+    glEnableVertexAttribArray(loc);
+    glVertexAttribPointer(loc, 3, GL_FLOAT, GL_FALSE, 
+          sizeof(Attribute), BUFFER_OFFSET(offsetof(Attribute, ka)));
+    
+    loc = glGetAttribLocation(shaderProgID, "diffuse");
+    glEnableVertexAttribArray(loc);
+    glVertexAttribPointer(loc, 3, GL_FLOAT, GL_FALSE, 
+          sizeof(Attribute), BUFFER_OFFSET(offsetof(Attribute, kd)));
+    
+    loc = glGetAttribLocation(shaderProgID, "specular");
+    glEnableVertexAttribArray(loc);
+    glVertexAttribPointer(loc, 3, GL_FLOAT, GL_FALSE, 
+          sizeof(Attribute), BUFFER_OFFSET(offsetof(Attribute, ks)));
+    
+    loc = glGetAttribLocation(shaderProgID, "shiness");
+    glEnableVertexAttribArray(loc);
+    glVertexAttribPointer(loc, 1, GL_FLOAT, GL_FALSE, 
+          sizeof(Attribute), BUFFER_OFFSET(offsetof(Attribute, shiness)));
+    
+    // make attribute buffers -- end
 }
 
 void ObjRenderer::renderView(const glm::vec3& front, const glm::vec3& up)
@@ -192,34 +295,33 @@ void ObjRenderer::renderView(const glm::vec3& front, const glm::vec3& up)
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
    
-    gluPerspective(90, 1, 0.01, 10);
+    glm::mat4 projMat = glm::perspective<float>(90, 1, 0.01, 10);
+    
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgID, "projMat"), 
+            1, false, (float*)&projMat);
     
     glm::vec3 eye = -front;
     glm::vec3 center = glm::vec3(0, 0, 0);
     
-    
-    
     glBindFramebuffer(GL_FRAMEBUFFER, frameBufferID);
+    
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glPushAttrib(GL_ALL_ATTRIB_BITS);
+    
     glEnable(GL_DEPTH_TEST);
-    glEnable(GL_COLOR_MATERIAL_FACE);
-    glEnable(GL_LIGHTING);
-    glEnable(GL_LIGHT0);
+
+    glm::mat4 viewMat = glm::lookAt(eye, center, rectUp);
     
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgID, "viewMat"), 
+            1, false, (float*)&viewMat);
     
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
+    glUniform3fv(glGetUniformLocation(shaderProgID, "eyePos"), 
+            1, (float*)&eye);
     
-    float lp0[] = {0, 0, 0, 1};
-    glLightfv(GL_LIGHT0, GL_POSITION, lp0);
-    glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+    glUseProgram(shaderProgID);
+
+    glDrawArrays(GL_TRIANGLES, 0, 3*nTriangles);
     
-    gluLookAt(eye.x, eye.y, eye.z, 
-            center.x, center.y, center.z,
-            rectUp.x, rectUp.y, rectUp.z);
-    
-    glCallList(listID);
     glPopAttrib();
     glFlush();
 }

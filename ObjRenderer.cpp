@@ -11,6 +11,9 @@
 #include "ObjRenderer.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
+#include "ImageUtils.h"
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "tiny_obj_loader.h"
 
 #define BUFFER_OFFSET(i) ((char *)NULL + (i))
 
@@ -19,10 +22,10 @@ GLuint ObjRenderer::depthBufferID = 0;
 GLuint ObjRenderer::frameBufferID = 0;
 GLuint ObjRenderer::shaderProgID = 0;
 GLuint ObjRenderer::vertexBufferID = 0;
-GLuint ObjRenderer::renderSize = 800;
+GLuint ObjRenderer::renderSize = 512;
 GLuint ObjRenderer::nTriangles = 0;
 GLuint ObjRenderer::texCount = 0;
-bool ObjRenderer::flipNormals = true;
+bool ObjRenderer::flipNormals = false;
 bool ObjRenderer::faceNormals = false;
 
 std::vector<glm::vec3> ObjRenderer::vertices;
@@ -48,7 +51,7 @@ void ObjRenderer::init()
     
     
     glutDisplayFunc(render);
-    glutInitDisplayMode(GLUT_DEPTH | GLUT_SINGLE | GLUT_RGB);
+    glutInitDisplayMode(GLUT_DEPTH | GLUT_SINGLE | GLUT_RGBA);
     glClearColor(0, 0, 0, 0);
     
     shaderProgID = loadShaders("Shader/phong.vert", "Shader/phong.frag");
@@ -66,8 +69,8 @@ void ObjRenderer::init()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     //NULL means reserve texture memory, but texels are undefined
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, renderSize, renderSize, 
-            0, GL_RGB, GL_FLOAT, NULL);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, renderSize, renderSize, 
+            0, GL_RGBA, GL_FLOAT, NULL);
     //-------------------------
     glGenFramebuffers(1, &frameBufferID);
     glBindFramebuffer(GL_FRAMEBUFFER, frameBufferID);
@@ -96,8 +99,29 @@ void ObjRenderer::makeTex(const std::string& shaderVarname, const cv::Mat& tex)
 
     glBindTexture(GL_TEXTURE_2D, textureID);
 
-    glTexImage2D(GL_TEXTURE_2D, 0,GL_RGB, tex.cols, tex.rows, 1, 
-            GL_RGB, GL_UNSIGNED_BYTE, tex.data);
+    GLenum format = 0;
+    GLenum type = 0;
+    
+    GLint swizzleMask[] = {GL_RED, GL_RED, GL_RED, GL_RED};
+    
+    switch(tex.type())
+    {
+    case CV_8UC3:
+        type = GL_UNSIGNED_BYTE;
+        format = GL_RGB;
+        break;
+    case CV_32FC1:
+        type = GL_FLOAT;
+        format = GL_RED;
+        glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+        break;
+    case CV_32FC3:
+        type = GL_FLOAT;
+        format = GL_RGB;
+        break;
+    }
+    glTexImage2D(GL_TEXTURE_2D, 0, format, tex.cols, tex.rows, 1, 
+            format, type, tex.data);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     
@@ -109,22 +133,54 @@ void ObjRenderer::makeTex(const std::string& shaderVarname, const cv::Mat& tex)
     texCount++;
 }
 
-void ObjRenderer::loadEnvMap(const std::string& path)
+
+
+
+void ObjRenderer::loadEnvMap(const std::string& path, bool gray)
 {
-    cv::Mat map = cv::imread(path);
-    // Create one OpenGL texture
+    cv::Mat map;
+    fipImage fip_map;
     
-    cv::flip(map, map, 0);
+    if(path.substr(path.length()-3, 3) == "hdr")
+    {
+        fip_map.load(path.c_str());
+        fi2mat(fip_map, map);
+    }
+    else
+    {
+        map = cv::imread(path);
+    }
     
-    cv::Mat map_diff, map_spec;
+    if(gray)
+    {
+        cv::cvtColor(map, map, CV_RGB2GRAY);
+    }
     
-    cv::GaussianBlur(map, map_diff, 
-            cv::Size(int(map.cols*0.2)*2+1, int(map.rows*0.2)*2+1), 0, 0);
+    cv::pow(map, 1/2.2, map);
     
-    cv::GaussianBlur(map, map_spec, 
-            cv::Size(int(map.cols*0.02)*2+1, int(map.rows*0.02)*2+1), 0, 0);
+    cv::Mat map_diff = map.clone();
+    cv::Mat map_spec = map.clone();
+    
+    cv::GaussianBlur(map_diff, map_diff, 
+            cv::Size(int(map_diff.cols*0.5)*2+1, int(map_diff.rows*0.5)*2+1), 0, 0);
+    
+    cv::GaussianBlur(map_spec, map_spec, 
+            cv::Size(int(map_spec.cols*0.1)*2+1, int(map_spec.rows*0.1)*2+1), 0, 0);
+    
+    
+    if(map.type() == CV_32FC3)
+    {
+        uniform_horizontal_edges<cv::Vec3f>(map_diff);
+        uniform_horizontal_edges<cv::Vec3f>(map_spec);
+    }
+    else
+    {
+        uniform_horizontal_edges<float>(map_diff);
+        uniform_horizontal_edges<float>(map_spec);
+    }
     
     makeTex("envmap_diff", map_diff);
+    
     makeTex("envmap_spec", map_spec);
 }
 
@@ -150,6 +206,8 @@ void ObjRenderer::loadModel(const std::string& path)
         exit(1);
     }
     // load obj -- end
+    
+    
     
     // find bound -- begin
     glm::vec3 lb(std::numeric_limits<float>::max());
@@ -196,25 +254,31 @@ void ObjRenderer::loadModel(const std::string& path)
                 if(flipNormals) 
                     attr.normal = -attr.normal;
                 
+                
                 if(materials.size())
                 {
                     unsigned mat_id = mesh.material_ids[index / 3];
-                    const tinyobj::material_t mat = materials[mat_id];
-                    attr.kd.x = mat.diffuse[2];
-                    attr.kd.y = mat.diffuse[1];
-                    attr.kd.z = mat.diffuse[0];
+                    attr.kd = glm::vec3(0.5);
+                    attr.ka = attr.ks = glm::vec3(0);
+                    
+                    if(mat_id < materials.size())
+                    {
+                        const tinyobj::material_t mat = materials[mat_id];
+                        attr.kd.x = mat.diffuse[2];
+                        attr.kd.y = mat.diffuse[1];
+                        attr.kd.z = mat.diffuse[0];
 
-                    attr.ka.x = mat.ambient[2];
-                    attr.ka.y = mat.ambient[1];
-                    attr.ka.z = mat.ambient[0];
+                        attr.ka.x = mat.ambient[2];
+                        attr.ka.y = mat.ambient[1];
+                        attr.ka.z = mat.ambient[0];
 
-                    attr.ks.x = mat.specular[2];
-                    attr.ks.y = mat.specular[1];
-                    attr.ks.z = mat.specular[0];
+                        attr.ks.x = mat.specular[2];
+                        attr.ks.y = mat.specular[1];
+                        attr.ks.z = mat.specular[0];
 
-                    attr.shiness = mat.shininess;
+                        attr.shiness = mat.shininess;
+                    }
                 }
-                
             }
             
             if(!faceNormals && vert_index*3+2 < mesh.normals.size())
@@ -295,7 +359,7 @@ void ObjRenderer::renderView(const glm::vec3& front, const glm::vec3& up)
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
    
-    glm::mat4 projMat = glm::perspective<float>(90, 1, 0.01, 10);
+    glm::mat4 projMat = glm::perspective<float>(30, 1, 0.01, 10);
     
     glUniformMatrix4fv(glGetUniformLocation(shaderProgID, "projMat"), 
             1, false, (float*)&projMat);
@@ -319,6 +383,8 @@ void ObjRenderer::renderView(const glm::vec3& front, const glm::vec3& up)
             1, (float*)&eye);
     
     glUseProgram(shaderProgID);
+    
+    glEnable(GL_BLEND);
 
     glDrawArrays(GL_TRIANGLES, 0, 3*nTriangles);
     
@@ -326,22 +392,13 @@ void ObjRenderer::renderView(const glm::vec3& front, const glm::vec3& up)
     glFlush();
 }
 
-cv::Mat3f ObjRenderer::genShading(const glm::vec3& front, const glm::vec3& up)
+cv::Mat4f ObjRenderer::genShading(const glm::vec3& front, const glm::vec3& up)
 {
-    cv::Mat3f image(renderSize, renderSize);
+    cv::Mat4f image(renderSize, renderSize);
     image.setTo(0.0);
     renderView(front, up);
-    std::vector<glm::vec3> color(renderSize*renderSize);
-    glReadPixels(0, 0, renderSize, renderSize, GL_RGB, GL_FLOAT, color.data());
-    
-    for(unsigned y=0; y<renderSize; y++)
-    {
-        for(unsigned x=0; x<renderSize; x++)
-        {
-            const glm::vec3& c = color[(renderSize-1-y)*renderSize+x];
-            image.at<cv::Vec3f>(y, x) = cv::Vec3f(c.x, c.y, c.z);
-        }
-    }
+    glReadPixels(0, 0, renderSize, renderSize, GL_RGBA, GL_FLOAT, image.data);
+    cv::flip(image, image, 0);
     return image;
 }
 

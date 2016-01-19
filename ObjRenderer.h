@@ -8,8 +8,6 @@
 #ifndef OBJRENDERER_H
 #define	OBJRENDERER_H
 
-#define TINYOBJLOADER_IMPLEMENTATION
-#include "tiny_obj_loader.h"
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <GL/freeglut.h>
@@ -25,9 +23,9 @@ class ObjRenderer
 public:
     static void makeTex(const std::string& shaderVarname, const cv::Mat& tex);
     static void init();
-    static void loadEnvMap(const std::string& path);
+    static void loadEnvMap(const std::string& path, bool gray = false);
     static void loadModel(const std::string& path);
-    static cv::Mat3f genShading(const glm::vec3& front, const glm::vec3& up);
+    static cv::Mat4f genShading(const glm::vec3& front, const glm::vec3& up);
 protected:
     static GLuint texCount;
     struct Attribute

@@ -8,7 +8,7 @@ in vec2 texCoord;
 in vec3 diffuse;
 in vec3 specular;
 in vec3 ambient;
-in vec3 shiness;
+in float shiness;
 
 uniform mat4 viewMat;
 uniform mat4 projMat;

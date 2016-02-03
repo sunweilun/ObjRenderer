@@ -11,6 +11,7 @@
 #include "ObjRenderer.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
+#include <bits/unordered_map.h>
 #include "ImageUtils.h"
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
@@ -29,7 +30,8 @@ unsigned ObjRenderer::shaderSeed = 0;
 unsigned ObjRenderer::shaderOutputID = 0;
 bool ObjRenderer::flipNormals = false;
 bool ObjRenderer::faceNormals = false;
-
+std::vector<unsigned> ObjRenderer::matGroupSizeList;
+RenderMode ObjRenderer::renderMode = RENDER_MODE_PLAIN;
 std::vector<glm::vec3> ObjRenderer::vertices;
 
 inline glm::vec3 getVec(const float* data)
@@ -189,8 +191,9 @@ void ObjRenderer::loadEnvMap(const std::string& path, bool gray)
     makeTex("envmap_spec", map_spec);
 }
 
-void ObjRenderer::loadModel(const std::string& path)
+void ObjRenderer::loadModel(const std::string& path, RenderMode mode)
 {
+    renderMode = mode;
     std::string::size_type pos = path.rfind('/');
     std::string mtl_base_path = "";
     if(pos != std::string::npos)
@@ -234,6 +237,9 @@ void ObjRenderer::loadModel(const std::string& path)
     // make attribute buffers -- begin
     
     std::vector<Attribute> attributeData;
+    std::unordered_map<unsigned, std::vector<Attribute> > mat_id2attrList;
+    
+    unsigned mat_id = 0;
     
     for(size_t shape_index=0; shape_index<shapes.size(); shape_index++)
     {
@@ -246,7 +252,6 @@ void ObjRenderer::loadModel(const std::string& path)
             
             if(index % 3 == 0)
             {
-                
                 unsigned i1 = mesh.indices[index];
                 unsigned i2 = mesh.indices[index+1];
                 unsigned i3 = mesh.indices[index+2];
@@ -257,10 +262,9 @@ void ObjRenderer::loadModel(const std::string& path)
                 if(flipNormals) 
                     attr.normal = -attr.normal;
                 
-                
                 if(materials.size())
                 {
-                    unsigned mat_id = mesh.material_ids[index / 3];
+                    mat_id = mesh.material_ids[index / 3];
                     attr.kd = glm::vec3(0.5);
                     attr.ka = attr.ks = glm::vec3(0);
                     
@@ -304,6 +308,21 @@ void ObjRenderer::loadModel(const std::string& path)
             unit_pos = (unit_pos-center) * 2.0f / diagLen;
             attr.vertex = unit_pos;
             attributeData.push_back(attr);
+            if(renderMode == RENDER_MODE_TEXTURE)
+                mat_id2attrList[mat_id].push_back(attr);
+        }
+    }
+    
+    if(renderMode == RENDER_MODE_TEXTURE)
+    {
+        unsigned current_size = 0;
+
+        for(auto it = mat_id2attrList.begin(); it != mat_id2attrList.end(); it++)
+        {
+            for(unsigned i=0; i<it->second.size(); i++)
+                attributeData[current_size+i] = it->second[i];
+            current_size += it->second.size();
+            matGroupSizeList.push_back(it->second.size());
         }
     }
     

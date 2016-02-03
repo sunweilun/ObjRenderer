@@ -18,6 +18,8 @@
 #include <vector>
 #include <unordered_map>
 
+typedef enum {RENDER_MODE_PLAIN, RENDER_MODE_TEXTURE} RenderMode;
+
 class ObjRenderer
 {
 public:
@@ -25,10 +27,11 @@ public:
     static void init();
     static void nextSeed();
     static void loadEnvMap(const std::string& path, bool gray = false);
-    static void loadModel(const std::string& path);
+    static void loadModel(const std::string& path, RenderMode mode = RENDER_MODE_TEXTURE);
     static cv::Mat4f genShading(const glm::vec3& front, const glm::vec3& up);
     static unsigned setShaderOutputID(unsigned id) { shaderOutputID = id; }
 protected:
+    static std::vector<unsigned> matGroupSizeList;
     static GLuint texCount;
     struct Attribute
     {
@@ -40,6 +43,8 @@ protected:
         glm::vec3 ks;
         float shiness;
     };
+    
+    static RenderMode renderMode;
     static void renderView(const glm::vec3& front, const glm::vec3& up);
     static void render();
     static std::vector<glm::vec3> vertices;

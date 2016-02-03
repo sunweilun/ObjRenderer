@@ -25,6 +25,8 @@ GLuint ObjRenderer::vertexBufferID = 0;
 GLuint ObjRenderer::renderSize = 512;
 GLuint ObjRenderer::nTriangles = 0;
 GLuint ObjRenderer::texCount = 0;
+unsigned ObjRenderer::shaderSeed = 0;
+unsigned ObjRenderer::shaderOutputID = 0;
 bool ObjRenderer::flipNormals = false;
 bool ObjRenderer::faceNormals = false;
 
@@ -48,15 +50,15 @@ void ObjRenderer::init()
     glutCreateWindow("SketchRenderer");
     glewInit();
     
-    
+    shaderSeed = time(0);
     
     glutDisplayFunc(render);
     glutInitDisplayMode(GLUT_DEPTH | GLUT_SINGLE | GLUT_RGBA);
     glClearColor(0, 0, 0, 0);
     
     shaderProgID = loadShaders("Shader/phong.vert", "Shader/phong.frag");
-    
-    
+    if(!shaderProgID)
+        shaderProgID = loadShaders("../Shader/phong.vert", "../Shader/phong.frag");
     
     glClampColor(GL_CLAMP_READ_COLOR, GL_FALSE);
     glClampColor(GL_CLAMP_VERTEX_COLOR, GL_FALSE);
@@ -133,7 +135,10 @@ void ObjRenderer::makeTex(const std::string& shaderVarname, const cv::Mat& tex)
     texCount++;
 }
 
-
+void ObjRenderer::nextSeed()
+{
+    shaderSeed = shaderSeed * 86028121 + 236887691;
+}
 
 
 void ObjRenderer::loadEnvMap(const std::string& path, bool gray)
@@ -206,8 +211,6 @@ void ObjRenderer::loadModel(const std::string& path)
         exit(1);
     }
     // load obj -- end
-    
-    
     
     // find bound -- begin
     glm::vec3 lb(std::numeric_limits<float>::max());
@@ -353,6 +356,9 @@ void ObjRenderer::loadModel(const std::string& path)
 
 void ObjRenderer::renderView(const glm::vec3& front, const glm::vec3& up)
 {
+    glUniform1ui(glGetUniformLocation(shaderProgID, "seed"), shaderSeed);
+    glUniform1ui(glGetUniformLocation(shaderProgID, "outputID"), shaderOutputID);
+    
     glm::vec3 right = glm::normalize(glm::cross(front, up));
     glm::vec3 rectUp = glm::cross(right, front); 
     

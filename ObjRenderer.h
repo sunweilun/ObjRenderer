@@ -23,9 +23,11 @@ class ObjRenderer
 public:
     static void makeTex(const std::string& shaderVarname, const cv::Mat& tex);
     static void init();
+    static void nextSeed();
     static void loadEnvMap(const std::string& path, bool gray = false);
     static void loadModel(const std::string& path);
     static cv::Mat4f genShading(const glm::vec3& front, const glm::vec3& up);
+    static unsigned setShaderOutputID(unsigned id) { shaderOutputID = id; }
 protected:
     static GLuint texCount;
     struct Attribute
@@ -48,6 +50,8 @@ protected:
     static GLuint renderSize;
     static GLuint vertexBufferID;
     static GLuint nTriangles;
+    static unsigned shaderSeed;
+    static unsigned shaderOutputID;
     static bool flipNormals;
     static bool faceNormals;
 };

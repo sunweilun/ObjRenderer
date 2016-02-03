@@ -22,14 +22,25 @@ struct Args
     int phi_inc;
     int phi_max;
     float brightness;
+    bool output_vertex;
 };
+
+inline int is_big_endian()
+{
+    union {
+        uint32_t i;
+        char c[4];
+    } bint = {0x01020304};
+
+    return bint.c[0] == 1; 
+}
 
 void processModel(const std::string& rootPath, 
         const std::string& filePath,
         const Args& args)
 {
     ObjRenderer::loadModel(rootPath+filePath);
-    
+    ObjRenderer::nextSeed();
     
     char cmd[1024];
     
@@ -52,8 +63,14 @@ void processModel(const std::string& rootPath,
             float p = phi * M_PI / 180;
             
             glm::vec3 front(cos(p)*cos(t), sin(p), cos(p)*sin(t));
-            cv::Mat4f image = ObjRenderer::genShading(-front*4.f, glm::vec3(0, 1, 0));
-            cv::Mat4f aa_image;
+            
+            cv::Mat4f image;
+            cv::Mat4f aa_image;   
+            
+                    
+            // output image
+            ObjRenderer::setShaderOutputID(0);
+            image = ObjRenderer::genShading(-front*4.f, glm::vec3(0, 1, 0));
             
             cv::GaussianBlur(image, image, cv::Size(3, 3), 0, 0);
             cv::resize(image, aa_image, cv::Size(256, 256));
@@ -70,6 +87,38 @@ void processModel(const std::string& rootPath,
             
             sprintf(fn, "%s/%d_%d.png", viewFolderPath.c_str(), theta, phi);
             cv::imwrite(fn, aa_image*255.0);
+            
+            if(!args.output_vertex)
+                continue;
+            
+            // output vertex
+            ObjRenderer::setShaderOutputID(1);
+            image = ObjRenderer::genShading(-front*4.f, glm::vec3(0, 1, 0));
+            
+            cv::GaussianBlur(image, image, cv::Size(3, 3), 0, 0);
+            cv::resize(image, aa_image, cv::Size(256, 256));
+            
+            sprintf(fn, "%s/%d_%d.pfm", viewFolderPath.c_str(), theta, phi);
+
+            std::vector<glm::vec3> pfm_colors(aa_image.rows*aa_image.cols);
+            
+            for(int i=0; i<aa_image.rows; i++)
+            {
+                for(int j=0; j<aa_image.cols; j++)
+                {
+                    cv::Vec4f c = aa_image.at<cv::Vec4f>(i, j);
+                    glm::vec3 &pc = pfm_colors[i*aa_image.cols+j];
+                    pc[0] = c[0];
+                    pc[1] = c[1];
+                    pc[2] = c[2];
+                }
+            }
+            
+            FILE* file = fopen(fn, "wb");
+            fprintf(file, "PF\n%d %d\n", aa_image.cols, aa_image.rows);
+            fprintf(file, "%f\n", is_big_endian()?1.0:-1.0);
+            fwrite(pfm_colors.data(), sizeof(glm::vec3), aa_image.rows*aa_image.cols, file);
+            fclose(file);
         }
     }
 }

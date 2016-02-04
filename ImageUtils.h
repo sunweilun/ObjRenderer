@@ -11,8 +11,9 @@
 #include <opencv/cv.h>
 #include <FreeImagePlus.h>
 
-void fi2mat(FIBITMAP* src, cv::Mat& dst)
+cv::Mat fi2mat(FIBITMAP* src)
 {
+    cv::Mat dst;
     //FIT_BITMAP    //standard image : 1 - , 4 - , 8 - , 16 - , 24 - , 32 - bit
     //FIT_UINT16    //array of unsigned short : unsigned 16 - bit
     //FIT_INT16     //array of short : signed 16 - bit
@@ -59,7 +60,7 @@ void fi2mat(FIBITMAP* src, cv::Mat& dst)
     default:
         // FIT_UNKNOWN // unknown type
         dst = cv::Mat(); // return empty Mat
-        return;
+        return dst;
     }
 
     int width = FreeImage_GetWidth(src);
@@ -91,6 +92,7 @@ void fi2mat(FIBITMAP* src, cv::Mat& dst)
     }
 
     cv::flip(dst, dst, 0);
+    return dst.clone();
 }
 
 template<typename T> void uniform_horizontal_edges(cv::Mat& mat)
@@ -115,6 +117,25 @@ template<typename T> void uniform_horizontal_edges(cv::Mat& mat)
             mat.at<T>(j, i) += (1-ratio)*diff_top + ratio*diff_bottom;
         }
     }
+}
+
+cv::Mat loadImage(const std::string& path)
+{
+    cv::Mat image;
+    
+    fipImage fip_map;
+    
+    if(path.substr(path.length()-3, 3) == "hdr" ||
+        path.substr(path.length()-3, 3) == "tga")
+    {
+        fip_map.load(path.c_str());
+        image = fi2mat(fip_map);
+    }
+    else
+    {
+        image = cv::imread(path);
+    }
+    return image;
 }
 
 #endif	/* IMAGEUTILS_H */

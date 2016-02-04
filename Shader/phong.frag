@@ -8,6 +8,7 @@ uniform uint outputID;
 in vec3 v, n, t;
 in vec3 ka, kd, ks;
 in float s;
+uniform sampler2D diffTex;
 
 uniform vec3 eyePos;
 
@@ -68,8 +69,9 @@ void main()
     }
     vec3 in_vec = normalize(eyePos - v);
     vec3 out_vec = dot(n, in_vec) * n * 2 - in_vec;
-    vec3 c = kd * getColor(envmap_diff, n);
+    vec3 c = kd * getColor(envmap_diff, n) * texture(diffTex, t.xy).rgb;
     c += ka;
-    c += ks * getColor(envmap_spec, out_vec);
+    c += ks * getColor(envmap_spec, out_vec)*0.5;
+
     color = vec4(c, 1);
 }

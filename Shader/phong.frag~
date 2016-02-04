@@ -1,0 +1,39 @@
+#version 330
+
+uniform sampler2D envmap_diff;
+uniform sampler2D envmap_spec;
+uniform uint seed;
+
+in vec3 v, n, t;
+in vec3 ka, kd, ks;
+in float s;
+
+uniform vec3 eyePos;
+
+out vec4 color;
+
+#define pi 3.14159265358979
+
+uint randu(uint seed)
+{
+	return seed * uint(15485863) + uint(32452843);
+}
+
+vec3 getColor(sampler2D map, vec3 dir) 
+{
+    float phi = acos(dir.y) / pi;
+    float theta = (atan(dir.z, dir.x)+pi) / (2*pi);
+    return texture(map, vec2(theta, phi)).rgb;
+}
+
+void main()
+{
+	unsigned r1 = rand(seed);
+	r1 / 
+    vec3 in_vec = normalize(eyePos - v);
+    vec3 out_vec = dot(n, in_vec) * n * 2 - in_vec;
+    vec3 c = kd * getColor(envmap_diff, n);
+    c += ka;
+    c += ks * getColor(envmap_spec, out_vec);
+    color = vec4(c, 1);
+}

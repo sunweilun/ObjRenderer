@@ -23,6 +23,9 @@ struct Args
     int phi_max;
     float brightness;
     bool output_vertex;
+    unsigned render_size;
+    bool texture;
+    unsigned output_size;
 };
 
 inline int is_big_endian()
@@ -39,7 +42,8 @@ void processModel(const std::string& rootPath,
         const std::string& filePath,
         const Args& args)
 {
-    ObjRenderer::loadModel(rootPath+filePath);
+    ObjRenderer::loadModel(rootPath+filePath, 
+            args.texture ? RENDER_MODE_TEXTURE : RENDER_MODE_PLAIN);
     ObjRenderer::nextSeed();
     
     char cmd[1024];
@@ -72,8 +76,9 @@ void processModel(const std::string& rootPath,
             ObjRenderer::setShaderOutputID(0);
             image = ObjRenderer::genShading(-front*4.f, glm::vec3(0, 1, 0));
             
-            cv::GaussianBlur(image, image, cv::Size(3, 3), 0, 0);
-            cv::resize(image, aa_image, cv::Size(256, 256));
+            unsigned filterSize = round(double(args.render_size) / args.output_size)*2+1;
+            cv::GaussianBlur(image, image, cv::Size(filterSize, filterSize), 0, 0);
+            cv::resize(image, aa_image, cv::Size(args.output_size, args.output_size));
             
             for(int i=0; i<aa_image.rows; i++)
             {
@@ -154,7 +159,7 @@ findModelsInFolder(const std::string& root, std::vector<std::pair<std::string, s
 
 void genViews(const std::string envPath, const std::string& folderPath, const Args& args)
 {
-    ObjRenderer::init();
+    ObjRenderer::init(args.render_size);
     ObjRenderer::loadEnvMap(envPath, true);
     
     std::vector<std::pair<std::string, std::string> > pathList;

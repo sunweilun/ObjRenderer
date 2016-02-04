@@ -12,6 +12,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 #include <bits/unordered_map.h>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 #include "ImageUtils.h"
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
@@ -25,14 +27,37 @@ GLuint ObjRenderer::shaderProgID = 0;
 GLuint ObjRenderer::vertexBufferID = 0;
 GLuint ObjRenderer::renderSize = 512;
 GLuint ObjRenderer::nTriangles = 0;
-GLuint ObjRenderer::texCount = 0;
+GLuint ObjRenderer::mapDiffID = 0;
+GLuint ObjRenderer::mapSpecID = 0;
+GLuint ObjRenderer::blankTexID = 0;
 unsigned ObjRenderer::shaderSeed = 0;
 unsigned ObjRenderer::shaderOutputID = 0;
 bool ObjRenderer::flipNormals = false;
 bool ObjRenderer::faceNormals = false;
-std::vector<unsigned> ObjRenderer::matGroupSizeList;
+std::vector<ObjRenderer::MatGroupInfo> ObjRenderer::matGroupInfoList;
 RenderMode ObjRenderer::renderMode = RENDER_MODE_PLAIN;
 std::vector<glm::vec3> ObjRenderer::vertices;
+std::unordered_map<std::string, GLuint> ObjRenderer::texPath2texID;
+std::unordered_map<std::string, GLuint> ObjRenderer::shaderTexName2texUnit;
+
+GLuint ObjRenderer::getTexID(const std::string& path)
+{
+    if(texPath2texID.find(path) == texPath2texID.end())
+    {
+        cv::Mat image = loadImage(path);
+        texPath2texID[path] = makeTex(image);
+    }
+    return texPath2texID[path];
+}
+
+void ObjRenderer::clearTextures()
+{
+    for(auto it = texPath2texID.begin(); it != texPath2texID.end(); it++)
+    {
+        glDeleteTextures(1, &it->second);
+    }
+    texPath2texID.clear();
+}
 
 inline glm::vec3 getVec(const float* data)
 {
@@ -43,8 +68,9 @@ inline glm::vec3 getVec(const float* data)
     return v;
 }
 
-void ObjRenderer::init()
+void ObjRenderer::init(unsigned size)
 {   
+    renderSize = size;
     int ac = 0;
     char** av;
     glutInit(&ac, av);
@@ -91,18 +117,20 @@ void ObjRenderer::init()
     glutHideWindow();
     
     glGenBuffers(1, &vertexBufferID);
+    
+    cv::Mat blank_image(8, 8, CV_8UC1, cv::Scalar(255));
+    blankTexID = makeTex(blank_image);
 }
 
-void ObjRenderer::makeTex(const std::string& shaderVarname, const cv::Mat& tex)
+GLuint ObjRenderer::makeTex(const cv::Mat& tex)
 {
     GLuint textureID;
 
     glGenTextures(1, &textureID);
-    
-    glActiveTexture(GL_TEXTURE0+texCount);
 
     glBindTexture(GL_TEXTURE_2D, textureID);
 
+    GLenum int_format = 0;
     GLenum format = 0;
     GLenum type = 0;
     
@@ -113,28 +141,41 @@ void ObjRenderer::makeTex(const std::string& shaderVarname, const cv::Mat& tex)
     case CV_8UC3:
         type = GL_UNSIGNED_BYTE;
         format = GL_RGB;
+        int_format = GL_BGR;
         break;
     case CV_32FC1:
         type = GL_FLOAT;
         format = GL_RED;
+        int_format = GL_RED;
+        glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+        break;
+    case CV_8UC1:
+        type = GL_UNSIGNED_BYTE;
+        format = GL_RED;
+        int_format = GL_RED;
         glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
         break;
     case CV_32FC3:
         type = GL_FLOAT;
         format = GL_RGB;
+        int_format = GL_BGR;
         break;
     }
+    
     glTexImage2D(GL_TEXTURE_2D, 0, format, tex.cols, tex.rows, 1, 
-            format, type, tex.data);
+            int_format, type, tex.data);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     
+    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT );
+    
+    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT );
+    
     glGenerateMipmap(GL_TEXTURE_2D);
     
-    glUniform1i(glGetUniformLocation(shaderProgID, shaderVarname.c_str()), texCount);
-    texCount++;
+    return textureID;
 }
 
 void ObjRenderer::nextSeed()
@@ -142,25 +183,18 @@ void ObjRenderer::nextSeed()
     shaderSeed = shaderSeed * 86028121 + 236887691;
 }
 
-
 void ObjRenderer::loadEnvMap(const std::string& path, bool gray)
 {
+    cv::Mat colored_map = loadImage(path);
     cv::Mat map;
-    fipImage fip_map;
-    
-    if(path.substr(path.length()-3, 3) == "hdr")
-    {
-        fip_map.load(path.c_str());
-        fi2mat(fip_map, map);
-    }
-    else
-    {
-        map = cv::imread(path);
-    }
     
     if(gray)
     {
-        cv::cvtColor(map, map, CV_RGB2GRAY);
+        cv::cvtColor(colored_map, map, CV_BGR2GRAY);
+    }
+    else
+    {
+        map = colored_map;
     }
     
     cv::pow(map, 1/2.2, map);
@@ -186,13 +220,39 @@ void ObjRenderer::loadEnvMap(const std::string& path, bool gray)
         uniform_horizontal_edges<float>(map_spec);
     }
     
-    makeTex("envmap_diff", map_diff);
+    glUseProgram(shaderProgID);
+    mapDiffID = makeTex(map_diff);
+    useTexture("envmap_diff", mapDiffID);
+    mapSpecID = makeTex(map_spec);
+    useTexture("envmap_spec", mapSpecID);
+}
+
+void ObjRenderer::useTexture(const std::string& shaderVarName, GLuint texID)
+{
+    GLuint unit = 0;
+    if(shaderTexName2texUnit.find(shaderVarName) == shaderTexName2texUnit.end())
+    {
+        unit = shaderTexName2texUnit.size();
+        shaderTexName2texUnit[shaderVarName] = unit;
+    }
+    else
+    {
+        unit = shaderTexName2texUnit[shaderVarName];
+    }
     
-    makeTex("envmap_spec", map_spec);
+    glUniform1i(glGetUniformLocation(shaderProgID, shaderVarName.c_str()), unit);
+    
+    glActiveTexture(GL_TEXTURE0+unit);
+    glBindTexture(GL_TEXTURE_2D, texID);
+    if(texID == 0)
+        glBindTexture(GL_TEXTURE_2D, blankTexID);
+    glActiveTexture(GL_TEXTURE0+shaderTexName2texUnit.size());
 }
 
 void ObjRenderer::loadModel(const std::string& path, RenderMode mode)
 {
+    matGroupInfoList.clear();
+    clearTextures();
     renderMode = mode;
     std::string::size_type pos = path.rfind('/');
     std::string mtl_base_path = "";
@@ -271,17 +331,17 @@ void ObjRenderer::loadModel(const std::string& path, RenderMode mode)
                     if(mat_id < materials.size())
                     {
                         const tinyobj::material_t mat = materials[mat_id];
-                        attr.kd.x = mat.diffuse[2];
+                        attr.kd.x = mat.diffuse[0];
                         attr.kd.y = mat.diffuse[1];
-                        attr.kd.z = mat.diffuse[0];
+                        attr.kd.z = mat.diffuse[2];
 
-                        attr.ka.x = mat.ambient[2];
+                        attr.ka.x = mat.ambient[0];
                         attr.ka.y = mat.ambient[1];
-                        attr.ka.z = mat.ambient[0];
+                        attr.ka.z = mat.ambient[2];
 
-                        attr.ks.x = mat.specular[2];
+                        attr.ks.x = mat.specular[0];
                         attr.ks.y = mat.specular[1];
-                        attr.ks.z = mat.specular[0];
+                        attr.ks.z = mat.specular[2];
 
                         attr.shiness = mat.shininess;
                     }
@@ -291,8 +351,6 @@ void ObjRenderer::loadModel(const std::string& path, RenderMode mode)
             if(!faceNormals && vert_index*3+2 < mesh.normals.size())
             {
                 attr.normal = getVec(&mesh.normals[vert_index*3]);
-                attr.normal.z = attr.normal.x;
-                attr.normal.x = mesh.normals[vert_index*3+2];
                 if(flipNormals) 
                     attr.normal = -attr.normal;
             }
@@ -300,7 +358,7 @@ void ObjRenderer::loadModel(const std::string& path, RenderMode mode)
             if(vert_index*2+1 < mesh.texcoords.size())
             {
                 attr.texCoord.x = mesh.texcoords[vert_index*2];
-                attr.texCoord.y = mesh.texcoords[vert_index*2+1];
+                attr.texCoord.y = -mesh.texcoords[vert_index*2+1];
             }
             
             glm::vec3 unit_pos;
@@ -316,13 +374,27 @@ void ObjRenderer::loadModel(const std::string& path, RenderMode mode)
     if(renderMode == RENDER_MODE_TEXTURE)
     {
         unsigned current_size = 0;
-
+        // iterate through material groups
+        
         for(auto it = mat_id2attrList.begin(); it != mat_id2attrList.end(); it++)
         {
             for(unsigned i=0; i<it->second.size(); i++)
                 attributeData[current_size+i] = it->second[i];
             current_size += it->second.size();
-            matGroupSizeList.push_back(it->second.size());
+            
+            MatGroupInfo info;
+            info.size = it->second.size();
+            
+            info.diffTexID = blankTexID;
+            
+            if(it->first < materials.size())
+            {
+                const tinyobj::material_t& mat = materials[it->first];
+                if(mat.diffuse_texname != "")
+                    info.diffTexID = getTexID(mtl_base_path+mat.diffuse_texname);
+            }
+            
+            matGroupInfoList.push_back(info);
         }
     }
     
@@ -410,8 +482,23 @@ void ObjRenderer::renderView(const glm::vec3& front, const glm::vec3& up)
     glUseProgram(shaderProgID);
     
     glEnable(GL_BLEND);
-
-    glDrawArrays(GL_TRIANGLES, 0, 3*nTriangles);
+    
+    if(renderMode == RENDER_MODE_TEXTURE)
+    {
+        unsigned base_offset = 0;
+        for(unsigned i=0; i<matGroupInfoList.size(); i++)
+        {
+            const MatGroupInfo &info = matGroupInfoList[i];
+            useTexture("diffTex", info.diffTexID);
+            glDrawArrays(GL_TRIANGLES, base_offset, info.size);
+            base_offset += info.size;
+        }
+    }
+    else
+    {
+        useTexture("diffTex", blankTexID);
+        glDrawArrays(GL_TRIANGLES, 0, 3*nTriangles);
+    }
     
     glPopAttrib();
     glFlush();
@@ -424,6 +511,7 @@ cv::Mat4f ObjRenderer::genShading(const glm::vec3& front, const glm::vec3& up)
     renderView(front, up);
     glReadPixels(0, 0, renderSize, renderSize, GL_RGBA, GL_FLOAT, image.data);
     cv::flip(image, image, 0);
+    cv::cvtColor(image, image, CV_RGBA2BGRA);
     return image;
 }
 

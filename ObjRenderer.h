@@ -23,16 +23,21 @@ typedef enum {RENDER_MODE_PLAIN, RENDER_MODE_TEXTURE} RenderMode;
 class ObjRenderer
 {
 public:
-    static void makeTex(const std::string& shaderVarname, const cv::Mat& tex);
-    static void init();
+    static GLuint makeTex(const cv::Mat& tex);
+    static void init(unsigned size = 512);
     static void nextSeed();
     static void loadEnvMap(const std::string& path, bool gray = false);
     static void loadModel(const std::string& path, RenderMode mode = RENDER_MODE_TEXTURE);
     static cv::Mat4f genShading(const glm::vec3& front, const glm::vec3& up);
     static unsigned setShaderOutputID(unsigned id) { shaderOutputID = id; }
+    static void clearTextures();
 protected:
-    static std::vector<unsigned> matGroupSizeList;
-    static GLuint texCount;
+    struct MatGroupInfo
+    {
+        unsigned size;
+        GLuint diffTexID;
+    };
+    static std::vector<MatGroupInfo> matGroupInfoList;
     struct Attribute
     {
         glm::vec3 vertex;
@@ -47,6 +52,8 @@ protected:
     static RenderMode renderMode;
     static void renderView(const glm::vec3& front, const glm::vec3& up);
     static void render();
+    static GLuint getTexID(const std::string& path);
+    static void useTexture(const std::string& shaderVarName, GLuint texID);
     static std::vector<glm::vec3> vertices;
     static GLuint colorTexID;
     static GLuint depthBufferID;
@@ -55,10 +62,15 @@ protected:
     static GLuint renderSize;
     static GLuint vertexBufferID;
     static GLuint nTriangles;
+    static GLuint mapDiffID;
+    static GLuint mapSpecID;
+    static GLuint blankTexID;
     static unsigned shaderSeed;
     static unsigned shaderOutputID;
     static bool flipNormals;
     static bool faceNormals;
+    static std::unordered_map<std::string, GLuint> shaderTexName2texUnit;
+    static std::unordered_map<std::string, GLuint> texPath2texID;
 };
 
 #endif	/* SKETCHRENDERER_H */

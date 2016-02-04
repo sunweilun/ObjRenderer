@@ -17,6 +17,9 @@ int main(int argc, char** argv)
     args.phi_max = 30;
     args.brightness = 1;
     args.output_vertex = 1;
+    args.render_size = 512;
+    args.output_size = 256;
+    args.texture = 1;
     
     FILE *file = fopen("config.txt", "r");
     fscanf(file, "folder_path = %s\n", &folderPath);
@@ -25,6 +28,9 @@ int main(int argc, char** argv)
     fscanf(file, "phi_inc = %d\n", &args.phi_inc);
     fscanf(file, "phi_max = %d\n", &args.phi_max);
     fscanf(file, "output_vertex = %d\n", &args.output_vertex);
+    fscanf(file, "render_size = %d\n", &args.render_size);
+    fscanf(file, "output_size = %d\n", &args.output_size);
+    fscanf(file, "texture = %d\n", &args.texture);
     fscanf(file, "brightness = %f\n", &args.brightness);
     fclose(file);
     

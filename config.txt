@@ -1,0 +1,10 @@
+folder_path = models/
+envmap_path = envmaps/envmap.hdr
+theta_inc = 30
+phi_inc = 10
+phi_max = 30
+output_vertex = 0
+render_size = 512
+output_size = 256
+texture = 1
+brightness = 1

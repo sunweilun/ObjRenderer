@@ -15,6 +15,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <FreeImagePlus.h>
 
 struct Args
 {
@@ -99,31 +100,26 @@ void processModel(const std::string& rootPath,
             // output vertex
             ObjRenderer::setShaderOutputID(1);
             image = ObjRenderer::genShading(-front*4.f, glm::vec3(0, 1, 0));
+            cv::GaussianBlur(image, image, cv::Size(filterSize, filterSize), 0, 0);
+            cv::resize(image, aa_image, cv::Size(args.output_size, args.output_size));
             
-            cv::GaussianBlur(image, image, cv::Size(3, 3), 0, 0);
-            cv::resize(image, aa_image, cv::Size(256, 256));
+            sprintf(fn, "%s/%d_%d.exr", viewFolderPath.c_str(), theta, phi);
             
-            sprintf(fn, "%s/%d_%d.pfm", viewFolderPath.c_str(), theta, phi);
-
-            std::vector<glm::vec3> pfm_colors(aa_image.rows*aa_image.cols);
+            fipImage hdr_image(FIT_RGBF, aa_image.cols, aa_image.rows, 96);
+            cv::Vec3f* data = (cv::Vec3f*)hdr_image.accessPixels();
             
             for(int i=0; i<aa_image.rows; i++)
             {
                 for(int j=0; j<aa_image.cols; j++)
                 {
-                    cv::Vec4f c = aa_image.at<cv::Vec4f>(i, j);
-                    glm::vec3 &pc = pfm_colors[i*aa_image.cols+j];
-                    pc[0] = c[0];
-                    pc[1] = c[1];
-                    pc[2] = c[2];
+                    const cv::Vec4f& c = aa_image.at<cv::Vec4f>(aa_image.rows-i-1, j);
+                    data[i*aa_image.rows+j][0] = c[0];
+                    data[i*aa_image.rows+j][1] = c[1];
+                    data[i*aa_image.rows+j][2] = c[2];
                 }
             }
             
-            FILE* file = fopen(fn, "wb");
-            fprintf(file, "PF\n%d %d\n", aa_image.cols, aa_image.rows);
-            fprintf(file, "%f\n", is_big_endian()?1.0:-1.0);
-            fwrite(pfm_colors.data(), sizeof(glm::vec3), aa_image.rows*aa_image.cols, file);
-            fclose(file);
+            hdr_image.save(fn);
         }
     }
 }

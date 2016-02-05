@@ -71,7 +71,7 @@ void main()
     vec3 out_vec = dot(n, in_vec) * n * 2 - in_vec;
     vec3 c = kd * getColor(envmap_diff, n) * texture(diffTex, t.xy).rgb;
     c += ka;
-    c += ks * getColor(envmap_spec, out_vec)*0.5;
+    //c += ks * getColor(envmap_spec, out_vec)*0.5;
 
     color = vec4(c, 1);
 }

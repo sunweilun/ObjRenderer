@@ -25,7 +25,6 @@ void mouseFunc(int button, int state, int x, int y)
         dist *= 1.05;
     else if(button == 4)
         dist *= 0.95;
-    glutPostRedisplay();
 }
 
 void motionFunc(int x, int y)
@@ -44,14 +43,13 @@ void motionFunc(int x, int y)
         phi = 11*M_PI/12;
     mouse_x = x;
     mouse_y = y;
-    ObjRenderer::setEyePos(dist*glm::vec3(sin(phi)*cos(theta), cos(phi), sin(phi)*sin(theta)));
-    glutPostRedisplay();
     
 }
 
 void idleFunc()
 {
     ObjRenderer::setEyePos(dist*glm::vec3(sin(phi)*cos(theta), cos(phi), sin(phi)*sin(theta)));
+    glutPostRedisplay();
 }
 
 void Viewer::run()

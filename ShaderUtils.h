@@ -13,8 +13,9 @@
 #include <GL/glu.h>
 #include <GL/freeglut.h>
 #include <iostream>
+#include <vector>
 
-char *textFileRead(const char *fn) 
+inline char *textFileRead(const char *fn) 
 {
     FILE *fp;
     char *content = NULL;
@@ -43,7 +44,7 @@ char *textFileRead(const char *fn)
     return content;
 }
 
-void printShaderInfoLog(GLuint obj)
+inline void printShaderInfoLog(GLuint obj)
 {
     int infologLength = 0;
     int charsWritten  = 0;
@@ -60,7 +61,7 @@ void printShaderInfoLog(GLuint obj)
     }
 }
 
-void printProgramInfoLog(GLuint obj)
+inline void printProgramInfoLog(GLuint obj)
 {
     int infologLength = 0;
     int charsWritten  = 0;
@@ -77,44 +78,57 @@ void printProgramInfoLog(GLuint obj)
     }
 }
 
-
-GLuint loadShaders(const char* vert, const char* frag) 
+inline GLuint loadShaders(const std::vector<std::string>& vertList, const std::vector<std::string>& fragList) 
 {
-        char *vs,*fs;
+    char *vs,*fs;
 
+    GLuint p = glCreateProgram();
+
+    for(unsigned i=0; i<vertList.size(); i++)
+    {
         GLuint v = glCreateShader(GL_VERTEX_SHADER);
-        GLuint f = glCreateShader(GL_FRAGMENT_SHADER);	
-
-        
-        vs = textFileRead(vert);
-        fs = textFileRead(frag);
-
+        vs = textFileRead(vertList[i].c_str());
         const char * vv = vs;
-        const char * ff = fs;
-
         glShaderSource(v, 1, &vv,NULL);
-        glShaderSource(f, 1, &ff,NULL);
-
-        free(vs);free(fs);
-
+        free(vs);
         glCompileShader(v);
         printShaderInfoLog(v);
+        glAttachShader(p,v);
+        glDeleteShader(v);
+    }
+
+    for(unsigned i=0; i<fragList.size(); i++)
+    {
+        GLuint f = glCreateShader(GL_FRAGMENT_SHADER);	
+        fs = textFileRead(fragList[i].c_str());
+        const char * ff = fs;
+        glShaderSource(f, 1, &ff,NULL);
+        free(fs);
         glCompileShader(f);
         printShaderInfoLog(f);
-        GLuint p = glCreateProgram();
-
-        glAttachShader(p,v);
         glAttachShader(p,f);
+        glDeleteShader(f);
+    }
 
-        glLinkProgram(p);
-        printProgramInfoLog(p);
-        
-        glUseProgram(p);
-        
-        
-        
-        return p;
+    glLinkProgram(p);
+    printProgramInfoLog(p);
+
+    glUseProgram(p);
+
+    return p;
 }
+
+inline GLuint loadShaders(const char* vert, const char* frag) 
+{     
+    return loadShaders(std::vector<std::string>(1, vert), std::vector<std::string>(1, frag));
+}
+
+inline GLuint loadShaders(const char* vert, const std::vector<std::string>& fragList) 
+{     
+    return loadShaders(std::vector<std::string>(1, vert), fragList);
+}
+
+
 
 
 #endif	/* SHADERUTILS_H */

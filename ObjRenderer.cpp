@@ -4,10 +4,12 @@
  * 
  * Created on November 29, 2015, 12:02 PM
  */
-
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "tiny_obj_loader.h"
 #include <limits>
 #include <GL/glew.h>
 #include "ShaderUtils.h"
+#include "ShaderData.h"
 #include "ObjRenderer.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
@@ -15,8 +17,6 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include "ImageUtils.h"
-#define TINYOBJLOADER_IMPLEMENTATION
-#include "tiny_obj_loader.h"
 
 #define BUFFER_OFFSET(i) ((char *)NULL + (i))
 
@@ -35,7 +35,6 @@ unsigned ObjRenderer::shaderOutputID = 0;
 bool ObjRenderer::flipNormals = false;
 bool ObjRenderer::faceNormals = false;
 std::vector<ObjRenderer::MatGroupInfo> ObjRenderer::matGroupInfoList;
-RenderMode ObjRenderer::renderMode = RENDER_MODE_PLAIN;
 std::vector<glm::vec3> ObjRenderer::vertices;
 std::unordered_map<std::string, GLuint> ObjRenderer::texPath2texID;
 std::unordered_map<std::string, GLuint> ObjRenderer::shaderTexName2texUnit;
@@ -62,15 +61,6 @@ void ObjRenderer::clearTextures()
     texPath2texID.clear();
 }
 
-inline glm::vec3 getVec(const float* data)
-{
-    glm::vec3 v;
-    v.x = data[0];
-    v.y = data[1];
-    v.z = data[2];
-    return v;
-}
-
 void ObjRenderer::init(unsigned size)
 {   
     renderSize = size;
@@ -87,11 +77,12 @@ void ObjRenderer::init(unsigned size)
     glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
     glClearColor(0, 0, 0, 0);
     
-    shaderProgID = loadShaders("Shader/phong.vert", "Shader/phong.frag");
-    if(!shaderProgID)
-        shaderProgID = loadShaders("../Shader/phong.vert", "../Shader/phong.frag");
+    std::vector<std::string> fragList;
+    fragList.push_back("Shader/main.frag");
+    fragList.push_back("Shader/coord.frag");
+    fragList.push_back("Shader/phong.frag");
     
-    
+    shaderProgID = loadShaders("Shader/geo.vert", fragList);
     
     glClampColor(GL_CLAMP_READ_COLOR, GL_FALSE);
     glClampColor(GL_CLAMP_VERTEX_COLOR, GL_FALSE);
@@ -252,13 +243,15 @@ void ObjRenderer::useTexture(const std::string& shaderVarName, GLuint texID)
         unit = shaderTexName2texUnit[shaderVarName];
     }
     
-    glUniform1i(glGetUniformLocation(shaderProgID, shaderVarName.c_str()), unit);
+    glUseProgram(shaderProgID);
     
-    glActiveTexture(GL_TEXTURE0+unit);
+    glUniform1i(glGetUniformLocation(shaderProgID, shaderVarName.c_str()), unit+1);
+    
+    glActiveTexture(GL_TEXTURE1+unit);
     glBindTexture(GL_TEXTURE_2D, texID);
     if(texID == 0)
         glBindTexture(GL_TEXTURE_2D, blankTexID);
-    glActiveTexture(GL_TEXTURE0+shaderTexName2texUnit.size());
+    glActiveTexture(GL_TEXTURE1+shaderTexName2texUnit.size());
 }
 
 void ObjRenderer::loadModel(const std::string& path, bool unitize)
@@ -327,9 +320,9 @@ void ObjRenderer::loadModel(const std::string& path, bool unitize)
                 unsigned i1 = mesh.indices[index];
                 unsigned i2 = mesh.indices[index+1];
                 unsigned i3 = mesh.indices[index+2];
-                glm::vec3 v1 = getVec(&mesh.positions[i1*3]);
-                glm::vec3 v2 = getVec(&mesh.positions[i2*3]);
-                glm::vec3 v3 = getVec(&mesh.positions[i3*3]);
+                glm::vec3 v1 = getVec<glm::vec3>(&mesh.positions[i1*3]);
+                glm::vec3 v2 = getVec<glm::vec3>(&mesh.positions[i2*3]);
+                glm::vec3 v3 = getVec<glm::vec3>(&mesh.positions[i3*3]);
                 attr.normal = glm::normalize(glm::cross(v2-v1, v3-v2));
                 if(flipNormals) 
                     attr.normal = -attr.normal;
@@ -340,7 +333,7 @@ void ObjRenderer::loadModel(const std::string& path, bool unitize)
             
             if(!faceNormals && vert_index*3+2 < mesh.normals.size())
             {
-                attr.normal = getVec(&mesh.normals[vert_index*3]);
+                attr.normal = getVec<glm::vec3>(&mesh.normals[vert_index*3]);
                 if(flipNormals) 
                     attr.normal = -attr.normal;
             }
@@ -351,12 +344,12 @@ void ObjRenderer::loadModel(const std::string& path, bool unitize)
                 attr.texCoord.y = -mesh.texcoords[vert_index*2+1];
             }
             
-            attr.vertex = getVec(&mesh.positions[vert_index*3]);
+            attr.vertex = getVec<glm::vec3>(&mesh.positions[vert_index*3]);
             
             if(unitize)
             {
                 glm::vec3 unit_pos;
-                unit_pos = getVec(&mesh.positions[vert_index*3]);
+                unit_pos = getVec<glm::vec3>(&mesh.positions[vert_index*3]);
                 unit_pos = (unit_pos-center) * 2.0f / diagLen;
                 attr.vertex = unit_pos;
             }
@@ -376,17 +369,11 @@ void ObjRenderer::loadModel(const std::string& path, bool unitize)
 
         MatGroupInfo info;
         info.size = it->second.size();
-        info.diffTexID = blankTexID;
 
         if(it->first < materials.size())
         {
             const tinyobj::material_t& mat = materials[it->first];
-            info.ka = getVec(mat.ambient);
-            info.kd = getVec(mat.diffuse);
-            info.ks = getVec(mat.specular);
-            info.s = mat.shininess;
-            if(mat.diffuse_texname != "")
-                info.diffTexID = getTexID(mtl_base_path+mat.diffuse_texname);
+            info.shaderData = makeMaterial(mat, mtl_base_path);
         }
 
         matGroupInfoList.push_back(info);
@@ -419,7 +406,7 @@ void ObjRenderer::loadModel(const std::string& path, bool unitize)
     // make attribute buffers -- end
 }
 
-void ObjRenderer::renderView()
+void ObjRenderer::renderView(bool forceOutputID)
 {
     
     glBindFramebuffer(GL_FRAMEBUFFER, frameBufferID);
@@ -460,15 +447,9 @@ void ObjRenderer::renderView()
     for(unsigned i=0; i<matGroupInfoList.size(); i++)
     {
         const MatGroupInfo &info = matGroupInfoList[i];
-        useTexture("diffTex", info.diffTexID);
-
-        glUniform3fv(glGetUniformLocation(shaderProgID, "kd"), 
-                1, (float*)&info.kd);
-        glUniform3fv(glGetUniformLocation(shaderProgID, "ka"), 
-                1, (float*)&info.ka);
-        glUniform3fv(glGetUniformLocation(shaderProgID, "ks"), 
-                1, (float*)&info.ks);
-        glUniform1f(glGetUniformLocation(shaderProgID, "shiness"), info.s);
+        info.shaderData->send2shader(shaderProgID);
+        if(forceOutputID)
+            glUniform1ui(glGetUniformLocation(shaderProgID, "outputID"), shaderOutputID);
         glDrawArrays(GL_TRIANGLES, base_offset, info.size);
         base_offset += info.size;
     }
@@ -477,11 +458,11 @@ void ObjRenderer::renderView()
     glFlush();
 }
 
-cv::Mat4f ObjRenderer::genShading()
+cv::Mat4f ObjRenderer::genShading(bool forceOutputID)
 {
     cv::Mat4f image(renderSize, renderSize);
     image.setTo(0.0);
-    renderView();
+    renderView(forceOutputID);
     glReadPixels(0, 0, renderSize, renderSize, GL_RGBA, GL_FLOAT, image.data);
     cv::flip(image, image, 0);
     cv::cvtColor(image, image, CV_RGBA2BGRA);
@@ -495,6 +476,10 @@ void ObjRenderer::render()
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glUseProgram(0);
     
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, colorTexID);
+    glEnable(GL_TEXTURE_2D);
+    
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     gluOrtho2D(0, 1, 0, 1);
@@ -505,10 +490,6 @@ void ObjRenderer::render()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
     glColor4f(1, 1, 1, 1);
-    
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, colorTexID);
-    glEnable(GL_TEXTURE_2D);
     
     glBegin(GL_QUADS);
     glTexCoord2f(0, 0);

@@ -10,11 +10,10 @@
 
 int main(int argc, char** argv) 
 {   
-    /*
-    ObjRenderer::init(800);
+    /*ObjRenderer::init(800);
     ObjRenderer::loadEnvMap("envmaps/envmap.hdr", true);
-    
-    ObjRenderer::loadModel("models/Headache Tommy/tommy.obj");
+    ObjRenderer::setShaderOutputID(1);
+    ObjRenderer::loadModel("models/bball/bball.obj");
     
     Viewer::init();
     Viewer::run();
@@ -27,7 +26,7 @@ int main(int argc, char** argv)
     args.phi_inc = 10;
     args.phi_max = 30;
     args.brightness = 1;
-    args.output_vertex = 1;
+    args.output_coord = 1;
     args.render_size = 512;
     args.output_size = 256;
     
@@ -37,7 +36,7 @@ int main(int argc, char** argv)
     fscanf(file, "theta_inc = %d\n", &args.theta_inc);
     fscanf(file, "phi_inc = %d\n", &args.phi_inc);
     fscanf(file, "phi_max = %d\n", &args.phi_max);
-    fscanf(file, "output_vertex = %d\n", &args.output_vertex);
+    fscanf(file, "output_coord = %d\n", &args.output_coord);
     fscanf(file, "render_size = %d\n", &args.render_size);
     fscanf(file, "output_size = %d\n", &args.output_size);
     fscanf(file, "brightness = %f\n", &args.brightness);

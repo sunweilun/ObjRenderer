@@ -2,16 +2,14 @@
 
 uniform sampler2D envmap_diff;
 uniform sampler2D envmap_spec;
+uniform sampler2D diffTex;
 uniform uint seed;
-uniform uint outputID;
 uniform vec3 ka;
 uniform vec3 kd;
 uniform vec3 ks;
 uniform float s;
 
 in vec3 v, n, t;
-
-uniform sampler2D diffTex;
 
 uniform vec3 eyePos;
 
@@ -63,18 +61,13 @@ vec3 getColor(sampler2D map, vec3 dir)
     return texture(map, vec2(theta, phi)).rgb;
 }
 
-void main()
+vec4 shadePhong()
 {
-    if(outputID == 1u)
-    {
-        color = vec4(v, 1);
-        return;
-    }
     vec3 in_vec = normalize(eyePos - v);
     vec3 out_vec = dot(n, in_vec) * n * 2 - in_vec;
     vec3 c = kd * getColor(envmap_diff, n) * texture(diffTex, t.xy).rgb;
     c += ka;
     c += ks * getColor(envmap_spec, out_vec)*0.3;
 
-    color = vec4(c, 1);
+    return vec4(c, 1);
 }

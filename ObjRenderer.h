@@ -8,22 +8,30 @@
 #ifndef OBJRENDERER_H
 #define	OBJRENDERER_H
 
-#include <GL/gl.h>
-#include <GL/glu.h>
-#include <GL/freeglut.h>
-#include <glm/glm.hpp>
-#include <opencv2/opencv.hpp>
+#include "ShaderData.h"
 
+#include <opencv2/opencv.hpp>
+#include <memory>
+#include <stdlib.h>
+#include <string.h>
+#include <string>
 #include <stdio.h>
 #include <vector>
 #include <unordered_map>
+#include "tiny_obj_loader.h"
 
-typedef enum {RENDER_MODE_PLAIN, RENDER_MODE_TEXTURE} RenderMode;
+template<typename T> inline T getVec(const float* data)
+{
+    T v;
+    memcpy(&v, data, sizeof(T));
+    return v;
+}
 
 class ObjRenderer
 {
+    friend class ShaderDataPhong;
 public:
-    static GLuint makeTex(const cv::Mat& tex);
+    
     static void init(unsigned size = 512);
     static void nextSeed();
     static void loadEnvMap(const std::string& path, bool gray = false);
@@ -31,19 +39,15 @@ public:
     static void setEyeUp(const glm::vec3& up) { eyeUp = up; }
     static void setEyeFocus(const glm::vec3& focus) { eyeFocus = focus; }
     static void setEyePos(const glm::vec3& pos) { eyePos = pos; }
-    static cv::Mat4f genShading();
+    static cv::Mat4f genShading(bool forceOutputID = false);
     static unsigned setShaderOutputID(unsigned id) { shaderOutputID = id; }
-    static void clearTextures();
-    static void render();
+    
+    
 protected:
     struct MatGroupInfo
     {
         unsigned size;
-        glm::vec3 ka;
-        glm::vec3 kd;
-        glm::vec3 ks;
-        float s;
-        GLuint diffTexID;
+        std::shared_ptr<ShaderData> shaderData;
     };
     static std::vector<MatGroupInfo> matGroupInfoList;
     struct Attribute
@@ -52,11 +56,14 @@ protected:
         glm::vec3 normal;
         glm::vec2 texCoord;
     };
-    
+    static void render();
     static glm::vec3 eyePos, eyeFocus, eyeUp;
-    static RenderMode renderMode;
-    static void renderView();
+    static void renderView(bool forceOutputID = false);
+    static void clearTextures();
+    static GLuint makeTex(const cv::Mat& tex);
     static GLuint getTexID(const std::string& path);
+    static std::shared_ptr<ShaderData> makeMaterial(const tinyobj::material_t& mat, 
+        const std::string& mtl_base_path);
     static void useTexture(const std::string& shaderVarName, GLuint texID);
     static std::vector<glm::vec3> vertices;
     static GLuint colorTexID;

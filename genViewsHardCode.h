@@ -23,7 +23,7 @@ struct Args
     int phi_inc;
     int phi_max;
     float brightness;
-    bool output_vertex;
+    bool output_coord;
     unsigned render_size;
     unsigned output_size;
 };
@@ -72,7 +72,6 @@ void processModel(const std::string& rootPath,
             
                     
             // output image
-            ObjRenderer::setShaderOutputID(0);
             ObjRenderer::setEyePos(eyePos*4.f);
             image = ObjRenderer::genShading();
             
@@ -93,12 +92,12 @@ void processModel(const std::string& rootPath,
             sprintf(fn, "%s/%d_%d.png", viewFolderPath.c_str(), theta, phi);
             cv::imwrite(fn, aa_image*255.0);
             
-            if(!args.output_vertex)
+            if(!args.output_coord)
                 continue;
             
             // output vertex
-            ObjRenderer::setShaderOutputID(1);
-            image = ObjRenderer::genShading();
+            ObjRenderer::setShaderOutputID(0);
+            image = ObjRenderer::genShading(true);
             cv::GaussianBlur(image, image, cv::Size(filterSize, filterSize), 0, 0);
             cv::resize(image, aa_image, cv::Size(args.output_size, args.output_size));
             

@@ -6,5 +6,4 @@ phi_max = 30
 output_vertex = 0
 render_size = 512
 output_size = 256
-texture = 1
-brightness = 1
+brightness = 2

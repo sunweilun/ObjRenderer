@@ -25,7 +25,6 @@ struct Args
     float brightness;
     bool output_vertex;
     unsigned render_size;
-    bool texture;
     unsigned output_size;
 };
 
@@ -43,8 +42,7 @@ void processModel(const std::string& rootPath,
         const std::string& filePath,
         const Args& args)
 {
-    ObjRenderer::loadModel(rootPath+filePath, 
-            args.texture ? RENDER_MODE_TEXTURE : RENDER_MODE_PLAIN);
+    ObjRenderer::loadModel(rootPath+filePath);
     ObjRenderer::nextSeed();
     
     char cmd[1024];
@@ -67,7 +65,7 @@ void processModel(const std::string& rootPath,
             float t = theta * M_PI / 180;
             float p = phi * M_PI / 180;
             
-            glm::vec3 front(cos(p)*cos(t), sin(p), cos(p)*sin(t));
+            glm::vec3 eyePos(cos(p)*cos(t), sin(p), cos(p)*sin(t));
             
             cv::Mat4f image;
             cv::Mat4f aa_image;   
@@ -75,7 +73,8 @@ void processModel(const std::string& rootPath,
                     
             // output image
             ObjRenderer::setShaderOutputID(0);
-            image = ObjRenderer::genShading(-front*4.f, glm::vec3(0, 1, 0));
+            ObjRenderer::setEyePos(eyePos*4.f);
+            image = ObjRenderer::genShading();
             
             unsigned filterSize = round(double(args.render_size) / args.output_size)*2+1;
             cv::GaussianBlur(image, image, cv::Size(filterSize, filterSize), 0, 0);
@@ -99,7 +98,7 @@ void processModel(const std::string& rootPath,
             
             // output vertex
             ObjRenderer::setShaderOutputID(1);
-            image = ObjRenderer::genShading(-front*4.f, glm::vec3(0, 1, 0));
+            image = ObjRenderer::genShading();
             cv::GaussianBlur(image, image, cv::Size(filterSize, filterSize), 0, 0);
             cv::resize(image, aa_image, cv::Size(args.output_size, args.output_size));
             
@@ -157,6 +156,8 @@ void genViews(const std::string envPath, const std::string& folderPath, const Ar
 {
     ObjRenderer::init(args.render_size);
     ObjRenderer::loadEnvMap(envPath, true);
+    
+    glutHideWindow();
     
     std::vector<std::pair<std::string, std::string> > pathList;
     findModelsInFolder(folderPath, pathList);

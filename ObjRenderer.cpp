@@ -39,6 +39,9 @@ RenderMode ObjRenderer::renderMode = RENDER_MODE_PLAIN;
 std::vector<glm::vec3> ObjRenderer::vertices;
 std::unordered_map<std::string, GLuint> ObjRenderer::texPath2texID;
 std::unordered_map<std::string, GLuint> ObjRenderer::shaderTexName2texUnit;
+glm::vec3 ObjRenderer::eyeFocus(0, 0, 0);
+glm::vec3 ObjRenderer::eyeUp(0, 1, 0);
+glm::vec3 ObjRenderer::eyePos(2, 2, 2);
 
 GLuint ObjRenderer::getTexID(const std::string& path)
 {
@@ -81,12 +84,14 @@ void ObjRenderer::init(unsigned size)
     shaderSeed = time(0);
     
     glutDisplayFunc(render);
-    glutInitDisplayMode(GLUT_DEPTH | GLUT_SINGLE | GLUT_RGBA);
+    glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
     glClearColor(0, 0, 0, 0);
     
     shaderProgID = loadShaders("Shader/phong.vert", "Shader/phong.frag");
     if(!shaderProgID)
         shaderProgID = loadShaders("../Shader/phong.vert", "../Shader/phong.frag");
+    
+    
     
     glClampColor(GL_CLAMP_READ_COLOR, GL_FALSE);
     glClampColor(GL_CLAMP_VERTEX_COLOR, GL_FALSE);
@@ -98,6 +103,8 @@ void ObjRenderer::init(unsigned size)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
     //NULL means reserve texture memory, but texels are undefined
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, renderSize, renderSize, 
             0, GL_RGBA, GL_FLOAT, NULL);
@@ -114,7 +121,6 @@ void ObjRenderer::init(unsigned size)
     //-------------------------
     //Attach depth buffer to FBO
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBufferID);
-    glutHideWindow();
     
     glGenBuffers(1, &vertexBufferID);
     
@@ -124,6 +130,7 @@ void ObjRenderer::init(unsigned size)
 
 GLuint ObjRenderer::makeTex(const cv::Mat& tex)
 {
+    
     GLuint textureID;
 
     glGenTextures(1, &textureID);
@@ -138,6 +145,11 @@ GLuint ObjRenderer::makeTex(const cv::Mat& tex)
     
     switch(tex.type())
     {
+    case CV_8UC4:
+        type = GL_UNSIGNED_BYTE;
+        format = GL_RGBA;
+        int_format = GL_BGRA;
+        break;
     case CV_8UC3:
         type = GL_UNSIGNED_BYTE;
         format = GL_RGB;
@@ -249,11 +261,11 @@ void ObjRenderer::useTexture(const std::string& shaderVarName, GLuint texID)
     glActiveTexture(GL_TEXTURE0+shaderTexName2texUnit.size());
 }
 
-void ObjRenderer::loadModel(const std::string& path, RenderMode mode)
+void ObjRenderer::loadModel(const std::string& path, bool unitize)
 {
     matGroupInfoList.clear();
     clearTextures();
-    renderMode = mode;
+    
     std::string::size_type pos = path.rfind('/');
     std::string mtl_base_path = "";
     if(pos != std::string::npos)
@@ -323,29 +335,7 @@ void ObjRenderer::loadModel(const std::string& path, RenderMode mode)
                     attr.normal = -attr.normal;
                 
                 if(materials.size())
-                {
                     mat_id = mesh.material_ids[index / 3];
-                    attr.kd = glm::vec3(0.5);
-                    attr.ka = attr.ks = glm::vec3(0);
-                    
-                    if(mat_id < materials.size())
-                    {
-                        const tinyobj::material_t mat = materials[mat_id];
-                        attr.kd.x = mat.diffuse[0];
-                        attr.kd.y = mat.diffuse[1];
-                        attr.kd.z = mat.diffuse[2];
-
-                        attr.ka.x = mat.ambient[0];
-                        attr.ka.y = mat.ambient[1];
-                        attr.ka.z = mat.ambient[2];
-
-                        attr.ks.x = mat.specular[0];
-                        attr.ks.y = mat.specular[1];
-                        attr.ks.z = mat.specular[2];
-
-                        attr.shiness = mat.shininess;
-                    }
-                }
             }
             
             if(!faceNormals && vert_index*3+2 < mesh.normals.size())
@@ -361,49 +351,53 @@ void ObjRenderer::loadModel(const std::string& path, RenderMode mode)
                 attr.texCoord.y = -mesh.texcoords[vert_index*2+1];
             }
             
-            glm::vec3 unit_pos;
-            unit_pos = getVec(&mesh.positions[vert_index*3]);
-            unit_pos = (unit_pos-center) * 2.0f / diagLen;
-            attr.vertex = unit_pos;
-            attributeData.push_back(attr);
-            if(renderMode == RENDER_MODE_TEXTURE)
-                mat_id2attrList[mat_id].push_back(attr);
-        }
-    }
-    
-    if(renderMode == RENDER_MODE_TEXTURE)
-    {
-        unsigned current_size = 0;
-        // iterate through material groups
-        
-        for(auto it = mat_id2attrList.begin(); it != mat_id2attrList.end(); it++)
-        {
-            for(unsigned i=0; i<it->second.size(); i++)
-                attributeData[current_size+i] = it->second[i];
-            current_size += it->second.size();
+            attr.vertex = getVec(&mesh.positions[vert_index*3]);
             
-            MatGroupInfo info;
-            info.size = it->second.size();
-            
-            info.diffTexID = blankTexID;
-            
-            if(it->first < materials.size())
+            if(unitize)
             {
-                const tinyobj::material_t& mat = materials[it->first];
-                if(mat.diffuse_texname != "")
-                    info.diffTexID = getTexID(mtl_base_path+mat.diffuse_texname);
+                glm::vec3 unit_pos;
+                unit_pos = getVec(&mesh.positions[vert_index*3]);
+                unit_pos = (unit_pos-center) * 2.0f / diagLen;
+                attr.vertex = unit_pos;
             }
-            
-            matGroupInfoList.push_back(info);
+            attributeData.push_back(attr);
+            mat_id2attrList[mat_id].push_back(attr);
         }
     }
     
-    nTriangles = attributeData.size() / 3;
+    unsigned current_size = 0;
+    // iterate through material groups
+
+    for(auto it = mat_id2attrList.begin(); it != mat_id2attrList.end(); it++)
+    {
+        for(unsigned i=0; i<it->second.size(); i++)
+            attributeData[current_size+i] = it->second[i];
+        current_size += it->second.size();
+
+        MatGroupInfo info;
+        info.size = it->second.size();
+        info.diffTexID = blankTexID;
+
+        if(it->first < materials.size())
+        {
+            const tinyobj::material_t& mat = materials[it->first];
+            info.ka = getVec(mat.ambient);
+            info.kd = getVec(mat.diffuse);
+            info.ks = getVec(mat.specular);
+            info.s = mat.shininess;
+            if(mat.diffuse_texname != "")
+                info.diffTexID = getTexID(mtl_base_path+mat.diffuse_texname);
+        }
+
+        matGroupInfoList.push_back(info);
+    }
     
     glBindBuffer(GL_ARRAY_BUFFER, vertexBufferID);
     
     glBufferData(GL_ARRAY_BUFFER, sizeof(Attribute)*attributeData.size(), 
             attributeData.data(), GL_STATIC_DRAW);
+    
+    
     
     GLuint loc;
     
@@ -422,93 +416,72 @@ void ObjRenderer::loadModel(const std::string& path, RenderMode mode)
     glVertexAttribPointer(loc, 2, GL_FLOAT, GL_FALSE, 
           sizeof(Attribute), BUFFER_OFFSET(offsetof(Attribute, texCoord)));
     
-    loc = glGetAttribLocation(shaderProgID, "ambient");
-    glEnableVertexAttribArray(loc);
-    glVertexAttribPointer(loc, 3, GL_FLOAT, GL_FALSE, 
-          sizeof(Attribute), BUFFER_OFFSET(offsetof(Attribute, ka)));
-    
-    loc = glGetAttribLocation(shaderProgID, "diffuse");
-    glEnableVertexAttribArray(loc);
-    glVertexAttribPointer(loc, 3, GL_FLOAT, GL_FALSE, 
-          sizeof(Attribute), BUFFER_OFFSET(offsetof(Attribute, kd)));
-    
-    loc = glGetAttribLocation(shaderProgID, "specular");
-    glEnableVertexAttribArray(loc);
-    glVertexAttribPointer(loc, 3, GL_FLOAT, GL_FALSE, 
-          sizeof(Attribute), BUFFER_OFFSET(offsetof(Attribute, ks)));
-    
-    loc = glGetAttribLocation(shaderProgID, "shiness");
-    glEnableVertexAttribArray(loc);
-    glVertexAttribPointer(loc, 1, GL_FLOAT, GL_FALSE, 
-          sizeof(Attribute), BUFFER_OFFSET(offsetof(Attribute, shiness)));
-    
     // make attribute buffers -- end
 }
 
-void ObjRenderer::renderView(const glm::vec3& front, const glm::vec3& up)
+void ObjRenderer::renderView()
 {
+    
+    glBindFramebuffer(GL_FRAMEBUFFER, frameBufferID);
+    glUseProgram(shaderProgID);
+    
     glUniform1ui(glGetUniformLocation(shaderProgID, "seed"), shaderSeed);
     glUniform1ui(glGetUniformLocation(shaderProgID, "outputID"), shaderOutputID);
     
-    glm::vec3 right = glm::normalize(glm::cross(front, up));
-    glm::vec3 rectUp = glm::cross(right, front); 
+    glm::vec3 front = eyeFocus - eyePos;
     
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
+    glm::vec3 right = glm::normalize(glm::cross(front, eyeUp));
+    glm::vec3 rectUp = glm::cross(right, front); 
    
-    glm::mat4 projMat = glm::perspective<float>(30, 1, 0.01, 10);
+    glm::mat4 projMat = glm::perspective<float>(30, 1, 0.01, 100);
     
     glUniformMatrix4fv(glGetUniformLocation(shaderProgID, "projMat"), 
             1, false, (float*)&projMat);
-    
-    glm::vec3 eye = -front;
-    glm::vec3 center = glm::vec3(0, 0, 0);
-    
-    glBindFramebuffer(GL_FRAMEBUFFER, frameBufferID);
     
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     
     glEnable(GL_DEPTH_TEST);
 
-    glm::mat4 viewMat = glm::lookAt(eye, center, rectUp);
+    glm::mat4 viewMat = glm::lookAt(eyePos, eyeFocus, rectUp);
     
     glUniformMatrix4fv(glGetUniformLocation(shaderProgID, "viewMat"), 
             1, false, (float*)&viewMat);
     
     glUniform3fv(glGetUniformLocation(shaderProgID, "eyePos"), 
-            1, (float*)&eye);
+            1, (float*)&eyePos);
     
-    glUseProgram(shaderProgID);
+    unsigned base_offset = 0;
     
-    glEnable(GL_BLEND);
+    useTexture("envmap_diff", mapDiffID);
     
-    if(renderMode == RENDER_MODE_TEXTURE)
+    useTexture("envmap_spec", mapSpecID);
+    
+    for(unsigned i=0; i<matGroupInfoList.size(); i++)
     {
-        unsigned base_offset = 0;
-        for(unsigned i=0; i<matGroupInfoList.size(); i++)
-        {
-            const MatGroupInfo &info = matGroupInfoList[i];
-            useTexture("diffTex", info.diffTexID);
-            glDrawArrays(GL_TRIANGLES, base_offset, info.size);
-            base_offset += info.size;
-        }
-    }
-    else
-    {
-        useTexture("diffTex", blankTexID);
-        glDrawArrays(GL_TRIANGLES, 0, 3*nTriangles);
+        const MatGroupInfo &info = matGroupInfoList[i];
+        useTexture("diffTex", info.diffTexID);
+
+        glUniform3fv(glGetUniformLocation(shaderProgID, "kd"), 
+                1, (float*)&info.kd);
+        glUniform3fv(glGetUniformLocation(shaderProgID, "ka"), 
+                1, (float*)&info.ka);
+        glUniform3fv(glGetUniformLocation(shaderProgID, "ks"), 
+                1, (float*)&info.ks);
+        glUniform1f(glGetUniformLocation(shaderProgID, "shiness"), info.s);
+        glDrawArrays(GL_TRIANGLES, base_offset, info.size);
+        base_offset += info.size;
     }
     
     glPopAttrib();
     glFlush();
 }
 
-cv::Mat4f ObjRenderer::genShading(const glm::vec3& front, const glm::vec3& up)
+cv::Mat4f ObjRenderer::genShading()
 {
     cv::Mat4f image(renderSize, renderSize);
     image.setTo(0.0);
-    renderView(front, up);
+    renderView();
     glReadPixels(0, 0, renderSize, renderSize, GL_RGBA, GL_FLOAT, image.data);
     cv::flip(image, image, 0);
     cv::cvtColor(image, image, CV_RGBA2BGRA);
@@ -517,15 +490,26 @@ cv::Mat4f ObjRenderer::genShading(const glm::vec3& front, const glm::vec3& up)
 
 void ObjRenderer::render()
 {
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    renderView();
+    
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glUseProgram(0);
+    
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     gluOrtho2D(0, 1, 0, 1);
+    
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     
-    glEnable(GL_TEXTURE_2D);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    
+    glColor4f(1, 1, 1, 1);
+    
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, colorTexID);
+    glEnable(GL_TEXTURE_2D);
+    
     glBegin(GL_QUADS);
     glTexCoord2f(0, 0);
     glVertex2f(0, 0);
@@ -536,6 +520,9 @@ void ObjRenderer::render()
     glTexCoord2f(1, 0);
     glVertex2f(1, 0);
     glEnd();
+    
     glDisable(GL_TEXTURE_2D);
+    
     glFlush();
+    glutSwapBuffers();
 }

@@ -4,10 +4,13 @@ uniform sampler2D envmap_diff;
 uniform sampler2D envmap_spec;
 uniform uint seed;
 uniform uint outputID;
+uniform vec3 ka;
+uniform vec3 kd;
+uniform vec3 ks;
+uniform float s;
 
 in vec3 v, n, t;
-in vec3 ka, kd, ks;
-in float s;
+
 uniform sampler2D diffTex;
 
 uniform vec3 eyePos;
@@ -71,7 +74,7 @@ void main()
     vec3 out_vec = dot(n, in_vec) * n * 2 - in_vec;
     vec3 c = kd * getColor(envmap_diff, n) * texture(diffTex, t.xy).rgb;
     c += ka;
-    //c += ks * getColor(envmap_spec, out_vec)*0.5;
+    c += ks * getColor(envmap_spec, out_vec)*0.3;
 
     color = vec4(c, 1);
 }

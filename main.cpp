@@ -6,9 +6,20 @@
  */
 
 #include "genViewsHardCode.h"
+#include "Viewer.h"
 
 int main(int argc, char** argv) 
 {   
+    /*
+    ObjRenderer::init(800);
+    ObjRenderer::loadEnvMap("envmaps/envmap.hdr", true);
+    
+    ObjRenderer::loadModel("models/Headache Tommy/tommy.obj");
+    
+    Viewer::init();
+    Viewer::run();
+    return 0;*/
+    
     Args args;
     char folderPath[1024];
     char envPath[1024];
@@ -19,7 +30,6 @@ int main(int argc, char** argv)
     args.output_vertex = 1;
     args.render_size = 512;
     args.output_size = 256;
-    args.texture = 1;
     
     FILE *file = fopen("config.txt", "r");
     fscanf(file, "folder_path = %s\n", &folderPath);
@@ -30,7 +40,6 @@ int main(int argc, char** argv)
     fscanf(file, "output_vertex = %d\n", &args.output_vertex);
     fscanf(file, "render_size = %d\n", &args.render_size);
     fscanf(file, "output_size = %d\n", &args.output_size);
-    fscanf(file, "texture = %d\n", &args.texture);
     fscanf(file, "brightness = %f\n", &args.brightness);
     fclose(file);
     

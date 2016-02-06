@@ -27,14 +27,22 @@ public:
     static void init(unsigned size = 512);
     static void nextSeed();
     static void loadEnvMap(const std::string& path, bool gray = false);
-    static void loadModel(const std::string& path, RenderMode mode = RENDER_MODE_TEXTURE);
-    static cv::Mat4f genShading(const glm::vec3& front, const glm::vec3& up);
+    static void loadModel(const std::string& path, bool unitize = true);
+    static void setEyeUp(const glm::vec3& up) { eyeUp = up; }
+    static void setEyeFocus(const glm::vec3& focus) { eyeFocus = focus; }
+    static void setEyePos(const glm::vec3& pos) { eyePos = pos; }
+    static cv::Mat4f genShading();
     static unsigned setShaderOutputID(unsigned id) { shaderOutputID = id; }
     static void clearTextures();
+    static void render();
 protected:
     struct MatGroupInfo
     {
         unsigned size;
+        glm::vec3 ka;
+        glm::vec3 kd;
+        glm::vec3 ks;
+        float s;
         GLuint diffTexID;
     };
     static std::vector<MatGroupInfo> matGroupInfoList;
@@ -43,15 +51,11 @@ protected:
         glm::vec3 vertex;
         glm::vec3 normal;
         glm::vec2 texCoord;
-        glm::vec3 ka;
-        glm::vec3 kd;
-        glm::vec3 ks;
-        float shiness;
     };
     
+    static glm::vec3 eyePos, eyeFocus, eyeUp;
     static RenderMode renderMode;
-    static void renderView(const glm::vec3& front, const glm::vec3& up);
-    static void render();
+    static void renderView();
     static GLuint getTexID(const std::string& path);
     static void useTexture(const std::string& shaderVarName, GLuint texID);
     static std::vector<glm::vec3> vertices;

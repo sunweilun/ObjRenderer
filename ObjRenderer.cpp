@@ -81,6 +81,7 @@ void ObjRenderer::init(unsigned size)
     fragList.push_back("Shader/main.frag");
     fragList.push_back("Shader/coord.frag");
     fragList.push_back("Shader/phong.frag");
+    fragList.push_back("Shader/brdf.frag");
     
     shaderProgID = loadShaders("Shader/geo.vert", fragList);
     
@@ -406,7 +407,7 @@ void ObjRenderer::loadModel(const std::string& path, bool unitize)
     // make attribute buffers -- end
 }
 
-void ObjRenderer::renderView(bool forceOutputID)
+void ObjRenderer::renderView()
 {
     
     glBindFramebuffer(GL_FRAMEBUFFER, frameBufferID);
@@ -448,7 +449,7 @@ void ObjRenderer::renderView(bool forceOutputID)
     {
         const MatGroupInfo &info = matGroupInfoList[i];
         info.shaderData->send2shader(shaderProgID);
-        if(forceOutputID)
+        if(shaderOutputID > 0)
             glUniform1ui(glGetUniformLocation(shaderProgID, "outputID"), shaderOutputID);
         glDrawArrays(GL_TRIANGLES, base_offset, info.size);
         base_offset += info.size;
@@ -458,11 +459,11 @@ void ObjRenderer::renderView(bool forceOutputID)
     glFlush();
 }
 
-cv::Mat4f ObjRenderer::genShading(bool forceOutputID)
+cv::Mat4f ObjRenderer::genShading()
 {
     cv::Mat4f image(renderSize, renderSize);
     image.setTo(0.0);
-    renderView(forceOutputID);
+    renderView();
     glReadPixels(0, 0, renderSize, renderSize, GL_RGBA, GL_FLOAT, image.data);
     cv::flip(image, image, 0);
     cv::cvtColor(image, image, CV_RGBA2BGRA);

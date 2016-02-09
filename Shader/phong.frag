@@ -69,5 +69,5 @@ vec4 shadePhong()
     c += ka;
     c += ks * getColor(envmap_spec, out_vec)*0.3;
 
-    return vec4(c, 1);
+    return vec4(c*2, 1);
 }

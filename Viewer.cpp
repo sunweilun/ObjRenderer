@@ -43,7 +43,18 @@ void motionFunc(int x, int y)
         phi = 11*M_PI/12;
     mouse_x = x;
     mouse_y = y;
-    
+}
+
+void keyboardFunc(unsigned char key, int x, int y)
+{
+    if(key >= '1' && key <= '9')
+        ObjRenderer::setShaderOutputID(key-'0');
+    switch(key)
+    {
+    case 27:
+        exit(0);
+        break;
+    }
 }
 
 void idleFunc()
@@ -54,9 +65,7 @@ void idleFunc()
 
 void Viewer::run()
 {
-    
     glutShowWindow();
-    
     glutMainLoop();
 }
 
@@ -65,6 +74,7 @@ void Viewer::init()
     glutMotionFunc(motionFunc);
     glutMouseFunc(mouseFunc);
     glutIdleFunc(idleFunc);
+    glutKeyboardFunc(keyboardFunc);
     ObjRenderer::setEyePos(dist*glm::vec3(sin(phi)*cos(theta), cos(phi), sin(phi)*sin(theta)));
 }
 

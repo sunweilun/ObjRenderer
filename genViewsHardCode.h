@@ -73,6 +73,7 @@ void processModel(const std::string& rootPath,
                     
             // output image
             ObjRenderer::setEyePos(eyePos*4.f);
+            ObjRenderer::setShaderOutputID(2);
             image = ObjRenderer::genShading();
             
             unsigned filterSize = round(double(args.render_size) / args.output_size)*2+1;
@@ -96,8 +97,8 @@ void processModel(const std::string& rootPath,
                 continue;
             
             // output vertex
-            ObjRenderer::setShaderOutputID(0);
-            image = ObjRenderer::genShading(true);
+            ObjRenderer::setShaderOutputID(1);
+            image = ObjRenderer::genShading();
             cv::GaussianBlur(image, image, cv::Size(filterSize, filterSize), 0, 0);
             cv::resize(image, aa_image, cv::Size(args.output_size, args.output_size));
             

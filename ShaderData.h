@@ -35,5 +35,15 @@ public:
         const std::string& mtl_base_path);
 };
 
+class ShaderDataBRDF : public ShaderData
+{
+protected:
+    unsigned outputID;
+public:
+    void send2shader(GLuint shaderProgID) const;
+    void loadData(const tinyobj::material_t& mat, 
+        const std::string& mtl_base_path);
+};
+
 #endif	/* SHADERDATA_H */
 

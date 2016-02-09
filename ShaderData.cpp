@@ -3,7 +3,7 @@
 
 void ShaderDataPhong::send2shader(GLuint shaderProgID) const
 {
-    glUniform1ui(glGetUniformLocation(shaderProgID, "outputID"), 1);
+    glUniform1ui(glGetUniformLocation(shaderProgID, "outputID"), 2);
     glUniform3fv(glGetUniformLocation(shaderProgID, "kd"), 
             1, (float*)&kd);
     glUniform3fv(glGetUniformLocation(shaderProgID, "ka"), 
@@ -23,4 +23,16 @@ void ShaderDataPhong::loadData(const tinyobj::material_t& mat,
     s = mat.shininess;
     if(mat.diffuse_texname != "")
         diffTexID = ObjRenderer::getTexID(mtl_base_path+mat.diffuse_texname);
+}
+
+void ShaderDataBRDF::send2shader(GLuint shaderProgID) const
+{
+    glUniform1ui(glGetUniformLocation(shaderProgID, "outputID"), 3);
+    
+}
+
+void ShaderDataBRDF::loadData(const tinyobj::material_t& mat, 
+        const std::string& mtl_base_path)
+{
+
 }

@@ -30,6 +30,7 @@ template<typename T> inline T getVec(const float* data)
 class ObjRenderer
 {
     friend class ShaderDataPhong;
+    friend class ShaderDataBRDF;
 public:
     
     static void init(unsigned size = 512);
@@ -39,9 +40,11 @@ public:
     static void setEyeUp(const glm::vec3& up) { eyeUp = up; }
     static void setEyeFocus(const glm::vec3& focus) { eyeFocus = focus; }
     static void setEyePos(const glm::vec3& pos) { eyePos = pos; }
-    static cv::Mat4f genShading(bool forceOutputID = false);
-    static unsigned setShaderOutputID(unsigned id) { shaderOutputID = id; }
-    
+    static cv::Mat4f genShading();
+    static void setShaderOutputID(int id) 
+    { 
+        shaderOutputID = id;
+    }
     
 protected:
     struct MatGroupInfo
@@ -58,7 +61,7 @@ protected:
     };
     static void render();
     static glm::vec3 eyePos, eyeFocus, eyeUp;
-    static void renderView(bool forceOutputID = false);
+    static void renderView();
     static void clearTextures();
     static GLuint makeTex(const cv::Mat& tex);
     static GLuint getTexID(const std::string& path);
@@ -76,6 +79,7 @@ protected:
     static GLuint mapDiffID;
     static GLuint mapSpecID;
     static GLuint blankTexID;
+    static GLuint forceOutputID;
     static unsigned shaderSeed;
     static unsigned shaderOutputID;
     static bool flipNormals;

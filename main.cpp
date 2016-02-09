@@ -10,14 +10,14 @@
 
 int main(int argc, char** argv) 
 {   
-    /*ObjRenderer::init(800);
-    ObjRenderer::loadEnvMap("envmaps/envmap.hdr", true);
-    ObjRenderer::setShaderOutputID(1);
-    ObjRenderer::loadModel("models/bball/bball.obj");
+    ObjRenderer::init(800);
+    ObjRenderer::loadEnvMap("envmaps/tunnel.hdr", true);
+    ObjRenderer::setShaderOutputID(3);
+    ObjRenderer::loadModel("models/Eva/eva.obj");
     
     Viewer::init();
     Viewer::run();
-    return 0;*/
+    return 0;
     
     Args args;
     char folderPath[1024];

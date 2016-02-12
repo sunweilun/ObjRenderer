@@ -5,8 +5,8 @@
  * Created on January 18, 2016, 8:39 PM
  */
 
-#ifndef GENVIEWSHARDCODE_H
-#define	GENVIEWSHARDCODE_H
+#ifndef GENVIEWSSHAPENET_H
+#define	GENVIEWSSHAPENET_H
 
 #include "ObjRenderer.h"
 #include <vector>
@@ -15,6 +15,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <FreeImagePlus.h>
 
 struct Args
@@ -27,16 +28,6 @@ struct Args
     unsigned render_size;
     unsigned output_size;
 };
-
-inline int is_big_endian()
-{
-    union {
-        uint32_t i;
-        char c[4];
-    } bint = {0x01020304};
-
-    return bint.c[0] == 1; 
-}
 
 void processModel(const std::string& rootPath, 
         const std::string& filePath,
@@ -57,6 +48,8 @@ void processModel(const std::string& rootPath,
     mkdir(viewFolderPath.c_str(), 0777);
     
     char fn[1024];
+    
+    
     
     for(int theta = 0; theta < 360; theta += args.theta_inc)
     {
@@ -161,12 +154,20 @@ void genViews(const std::string envPath, const std::string& folderPath, const Ar
     
     std::vector<std::pair<std::string, std::string> > pathList;
     findModelsInFolder(folderPath, pathList);
+    
+    struct timeval ts, te;
+    gettimeofday(&ts, NULL);
     for(unsigned i=0; i<pathList.size(); i++)
     {
         std::string fullPath = pathList[i].first + pathList[i].second;
         printf("Processing %s (%d / %d)\n", fullPath.c_str(), 
                 i+1, pathList.size());
         processModel(pathList[i].first, pathList[i].second, args);
+        gettimeofday(&te, NULL);
+        double dt = te.tv_sec-ts.tv_sec+(te.tv_usec-ts.tv_usec)*1e-6;
+        double eta = dt/(i+1)*(pathList.size()-i-1);
+        printf("ETA = %02d:%02d:%02d\n", unsigned(eta)/60/60, 
+                (unsigned(eta)/60)%60, unsigned(eta)%60);
     }
 }
 

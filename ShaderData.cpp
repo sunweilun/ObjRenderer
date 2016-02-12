@@ -11,6 +11,7 @@ void ShaderDataPhong::send2shader(GLuint shaderProgID) const
     glUniform3fv(glGetUniformLocation(shaderProgID, "ks"), 
             1, (float*)&ks);
     glUniform1f(glGetUniformLocation(shaderProgID, "shiness"), s);
+    
     ObjRenderer::useTexture("diffTex", diffTexID);
 }
 
@@ -28,11 +29,13 @@ void ShaderDataPhong::loadData(const tinyobj::material_t& mat,
 void ShaderDataBRDF::send2shader(GLuint shaderProgID) const
 {
     glUniform1ui(glGetUniformLocation(shaderProgID, "outputID"), 3);
-    
+    ObjRenderer::useTexture("brdfTex", brdfTexID, GL_TEXTURE_3D);
 }
 
 void ShaderDataBRDF::loadData(const tinyobj::material_t& mat, 
         const std::string& mtl_base_path)
 {
-
+    std::string path = mat.unknown_parameter.at("brdf");
+    path = mtl_base_path + path;
+    brdfTexID = ObjRenderer::getTexID(path, false);
 }

@@ -131,6 +131,49 @@ cv::Mat loadImage(const std::string& path)
         fip_map.load(path.c_str());
         image = fi2mat(fip_map);
     }
+    else if(path.substr(path.length()-6, 6) == "binary") // read brdf file
+    {
+    
+        FILE* file = fopen(path.c_str(), "rb");
+        cv::Vec3i dim;
+
+        fread(&dim[0], sizeof(cv::Vec3i), 1, file);
+        std::vector<double> data(dim[0]*dim[1]*dim[2]*3);
+        fread(data.data(), sizeof(double), data.size(), file);
+
+        image = cv::Mat3f(3, &dim[0]);
+        
+        size_t size = dim[0]*dim[1]*dim[2];
+
+        for(int i=0; i<image.size[0]; i++)
+        {
+            for(int j=0; j<image.size[1]; j++)
+            {
+                for(int k=0; k<image.size[2]; k++)
+                {
+                    size_t index = i*image.size[1]*image.size[2];
+                    index += j*image.size[2] + k;
+                    cv::Vec3f& color = image.at<cv::Vec3f>(i, j, k);
+                    color[0] = data[index+size*2];
+                    color[1] = data[index+size];
+                    color[2] = data[index];
+                }
+            }
+        }
+        
+        /*cv::Mat3f part(900, 900);
+        for(int i=0; i<900; i++)
+            for(int j=0; j<900; j++)
+                part.at<cv::Vec3f>(i, j) = image.at<cv::Vec3f>((i/10)*90+(j/10), 90);
+        
+        cv::namedWindow("image");
+        cv::imshow("image", part*100.0);
+        cv::waitKey();*/
+        
+        //cv::flip(image, image, 0);
+        
+        fclose(file);
+    }
     else
     {
         image = cv::imread(path);

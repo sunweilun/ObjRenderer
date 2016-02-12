@@ -68,6 +68,5 @@ vec4 shadePhong()
     vec3 c = kd * getColor(envmap_diff, n) * texture(diffTex, t.xy).rgb;
     c += ka;
     c += ks * getColor(envmap_spec, out_vec)*0.3;
-
-    return vec4(c*2, 1);
+    return vec4(c, 1);
 }

@@ -58,16 +58,17 @@ protected:
         glm::vec3 vertex;
         glm::vec3 normal;
         glm::vec2 texCoord;
+        glm::vec3 binormal;
     };
     static void render();
     static glm::vec3 eyePos, eyeFocus, eyeUp;
     static void renderView();
     static void clearTextures();
-    static GLuint makeTex(const cv::Mat& tex);
-    static GLuint getTexID(const std::string& path);
+    static GLuint makeTex(const cv::Mat& tex, bool flip = true);
+    static GLuint getTexID(const std::string& path, bool flip = true);
     static std::shared_ptr<ShaderData> makeMaterial(const tinyobj::material_t& mat, 
         const std::string& mtl_base_path);
-    static void useTexture(const std::string& shaderVarName, GLuint texID);
+    static void useTexture(const std::string& shaderVarName, GLuint texID, GLenum type = GL_TEXTURE_2D);
     static std::vector<glm::vec3> vertices;
     static GLuint colorTexID;
     static GLuint depthBufferID;

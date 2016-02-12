@@ -5,19 +5,18 @@
  * Created on January 16, 2016, 2:05 PM
  */
 
-#include "genViewsHardCode.h"
+#include "genViewsShapenet.h"
 #include "Viewer.h"
 
 int main(int argc, char** argv) 
 {   
-    ObjRenderer::init(800);
+    /*ObjRenderer::init(800);
     ObjRenderer::loadEnvMap("envmaps/tunnel.hdr", true);
-    ObjRenderer::setShaderOutputID(3);
-    ObjRenderer::loadModel("models/Eva/eva.obj");
-    
+    ObjRenderer::setShaderOutputID(0);
+    ObjRenderer::loadModel("models/M4A1/M4A1.obj");
     Viewer::init();
     Viewer::run();
-    return 0;
+    return 0;*/
     
     Args args;
     char folderPath[1024];

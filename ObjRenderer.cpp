@@ -42,12 +42,12 @@ glm::vec3 ObjRenderer::eyeFocus(0, 0, 0);
 glm::vec3 ObjRenderer::eyeUp(0, 1, 0);
 glm::vec3 ObjRenderer::eyePos(2, 2, 2);
 
-GLuint ObjRenderer::getTexID(const std::string& path)
+GLuint ObjRenderer::getTexID(const std::string& path, bool flip)
 {
     if(texPath2texID.find(path) == texPath2texID.end())
     {
         cv::Mat image = loadImage(path);
-        texPath2texID[path] = makeTex(image);
+        texPath2texID[path] = makeTex(image, flip);
     }
     return texPath2texID[path];
 }
@@ -120,21 +120,17 @@ void ObjRenderer::init(unsigned size)
     blankTexID = makeTex(blank_image);
 }
 
-GLuint ObjRenderer::makeTex(const cv::Mat& tex)
+GLuint ObjRenderer::makeTex(const cv::Mat& tex, bool flip)
 {
-    
     GLuint textureID;
 
     glGenTextures(1, &textureID);
-
-    glBindTexture(GL_TEXTURE_2D, textureID);
-
+    
     GLenum int_format = 0;
     GLenum format = 0;
     GLenum type = 0;
     
-    GLint swizzleMask[] = {GL_RED, GL_RED, GL_RED, GL_RED};
-    
+    GLint swizzleMask[] = {GL_RED, GL_GREEN, GL_BLUE, GL_ALPHA};
     switch(tex.type())
     {
     case CV_8UC4:
@@ -149,35 +145,74 @@ GLuint ObjRenderer::makeTex(const cv::Mat& tex)
         break;
     case CV_32FC1:
         type = GL_FLOAT;
-        format = GL_RED;
+        format = GL_R32F;
         int_format = GL_RED;
-        glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+        swizzleMask[1] = swizzleMask[2] = swizzleMask[3] = GL_RED;
         break;
     case CV_8UC1:
         type = GL_UNSIGNED_BYTE;
         format = GL_RED;
         int_format = GL_RED;
-        glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+        swizzleMask[1] = swizzleMask[2] = swizzleMask[3] = GL_RED;
         break;
     case CV_32FC3:
         type = GL_FLOAT;
-        format = GL_RGB;
+        format = GL_RGB32F;
         int_format = GL_BGR;
         break;
+    default:
+        glDeleteTextures(1, &textureID);
+        return 0;
     }
     
-    glTexImage2D(GL_TEXTURE_2D, 0, format, tex.cols, tex.rows, 1, 
-            int_format, type, tex.data);
+    cv::Mat texFlip;
+    if(flip)
+        cv::flip(tex, texFlip, 0);
+    else
+        texFlip = tex;
+    
+    switch(tex.dims)
+    {
+        case 2:
+            glBindTexture(GL_TEXTURE_2D, textureID);
+            
+            glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+            
+            glTexImage2D(GL_TEXTURE_2D, 0, format, tex.cols, tex.rows, 0, 
+                int_format, type, texFlip.data);
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    
-    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT );
-    
-    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT );
-    
-    glGenerateMipmap(GL_TEXTURE_2D);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+
+            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+
+            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+            glGenerateMipmap(GL_TEXTURE_2D);
+            break;
+            
+        case 3:
+            glBindTexture(GL_TEXTURE_3D, textureID);
+            
+            glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+            
+            glTexImage3D(GL_TEXTURE_3D, 0, format, tex.size[2], tex.size[1], tex.size[0], 0, 
+                int_format, type, texFlip.data);
+
+            glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+            glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+
+            glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+
+            glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+            glGenerateMipmap(GL_TEXTURE_3D);
+            break;
+    }
     
     return textureID;
 }
@@ -231,7 +266,7 @@ void ObjRenderer::loadEnvMap(const std::string& path, bool gray)
     useTexture("envmap_spec", mapSpecID);
 }
 
-void ObjRenderer::useTexture(const std::string& shaderVarName, GLuint texID)
+void ObjRenderer::useTexture(const std::string& shaderVarName, GLuint texID, GLenum type)
 {
     GLuint unit = 0;
     if(shaderTexName2texUnit.find(shaderVarName) == shaderTexName2texUnit.end())
@@ -249,9 +284,9 @@ void ObjRenderer::useTexture(const std::string& shaderVarName, GLuint texID)
     glUniform1i(glGetUniformLocation(shaderProgID, shaderVarName.c_str()), unit+1);
     
     glActiveTexture(GL_TEXTURE1+unit);
-    glBindTexture(GL_TEXTURE_2D, texID);
+    glBindTexture(type, texID);
     if(texID == 0)
-        glBindTexture(GL_TEXTURE_2D, blankTexID);
+        glBindTexture(type, blankTexID);
     glActiveTexture(GL_TEXTURE1+shaderTexName2texUnit.size());
 }
 
@@ -328,8 +363,27 @@ void ObjRenderer::loadModel(const std::string& path, bool unitize)
                 if(flipNormals) 
                     attr.normal = -attr.normal;
                 
-                if(materials.size())
+                if(materials.size() && index / 3 < mesh.material_ids.size())
                     mat_id = mesh.material_ids[index / 3];
+                
+                if(mat_id >= materials.size())
+                    mat_id = 0;
+                
+                /*if(i1*2+1 < mesh.texcoords.size() &&
+                        i2*2+1 < mesh.texcoords.size() &&
+                        i3*2+1 < mesh.texcoords.size())
+                {
+                    glm::vec2 tc1 = getVec<glm::vec2>(&mesh.texcoords[i1*2]);
+                    glm::vec2 tc2 = getVec<glm::vec2>(&mesh.texcoords[i2*2]);
+                    glm::vec2 tc3 = getVec<glm::vec2>(&mesh.texcoords[i3*2]);
+                    glm::vec2 tc12 = tc2 - tc1;
+                    glm::vec2 tc13 = tc3 - tc1;
+                    float denom = tc13.y*tc12.x - tc12.y*tc13.x;
+                    float alpha = tc13.y / denom;
+                    float beta = -tc12.y / denom;
+                    attr.binormal = glm::normalize(alpha*(v2-v1)+beta*(v3-v1));
+                }*/
+                
             }
             
             if(!faceNormals && vert_index*3+2 < mesh.normals.size())
@@ -341,8 +395,7 @@ void ObjRenderer::loadModel(const std::string& path, bool unitize)
             
             if(vert_index*2+1 < mesh.texcoords.size())
             {
-                attr.texCoord.x = mesh.texcoords[vert_index*2];
-                attr.texCoord.y = -mesh.texcoords[vert_index*2+1];
+                attr.texCoord = getVec<glm::vec2>(&mesh.texcoords[vert_index*2]);
             }
             
             attr.vertex = getVec<glm::vec3>(&mesh.positions[vert_index*3]);
@@ -404,6 +457,11 @@ void ObjRenderer::loadModel(const std::string& path, bool unitize)
     glVertexAttribPointer(loc, 2, GL_FLOAT, GL_FALSE, 
           sizeof(Attribute), BUFFER_OFFSET(offsetof(Attribute, texCoord)));
     
+    loc = glGetAttribLocation(shaderProgID, "binormal");
+    glEnableVertexAttribArray(loc);
+    glVertexAttribPointer(loc, 3, GL_FLOAT, GL_FALSE, 
+          sizeof(Attribute), BUFFER_OFFSET(offsetof(Attribute, binormal)));
+    
     // make attribute buffers -- end
 }
 
@@ -441,19 +499,30 @@ void ObjRenderer::renderView()
     
     unsigned base_offset = 0;
     
+    
+    
     useTexture("envmap_diff", mapDiffID);
     
     useTexture("envmap_spec", mapSpecID);
     
+    
+    
+    
+    
     for(unsigned i=0; i<matGroupInfoList.size(); i++)
     {
+        
         const MatGroupInfo &info = matGroupInfoList[i];
+  
         info.shaderData->send2shader(shaderProgID);
+
         if(shaderOutputID > 0)
             glUniform1ui(glGetUniformLocation(shaderProgID, "outputID"), shaderOutputID);
         glDrawArrays(GL_TRIANGLES, base_offset, info.size);
         base_offset += info.size;
     }
+    
+    
     
     glPopAttrib();
     glFlush();
@@ -463,6 +532,7 @@ cv::Mat4f ObjRenderer::genShading()
 {
     cv::Mat4f image(renderSize, renderSize);
     image.setTo(0.0);
+    
     renderView();
     glReadPixels(0, 0, renderSize, renderSize, GL_RGBA, GL_FLOAT, image.data);
     cv::flip(image, image, 0);

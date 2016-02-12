@@ -39,6 +39,7 @@ class ShaderDataBRDF : public ShaderData
 {
 protected:
     unsigned outputID;
+    GLuint brdfTexID;
 public:
     void send2shader(GLuint shaderProgID) const;
     void loadData(const tinyobj::material_t& mat, 

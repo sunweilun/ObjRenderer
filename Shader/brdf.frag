@@ -10,7 +10,7 @@ uniform vec3 eyePos;
 
 vec4 shadeBRDF()
 {
-    vec3 pl = vec3(0, 2, 0);
+    vec3 pl = eyePos;
 
     vec3 bbn = cross(n, bn);
      
@@ -20,10 +20,11 @@ vec4 shadeBRDF()
 
     if(d < 0)
         return vec4(0);
+
     vec3 out_vec = normalize(eyePos - v);
     vec3 h_vec = normalize(in_vec + out_vec);
-    float theta_h = acos(dot(h_vec, normalize(n)));
-    float theta_d = acos(dot(h_vec, in_vec));
+    float theta_h = acos(clamp(dot(h_vec, normalize(n)), -1, 1));
+    float theta_d = acos(clamp(dot(h_vec, in_vec), -1, 1));
     float phi_d = atan(dot(bn, in_vec), dot(bbn, in_vec));
 
     ivec3 tSize = textureSize(brdfTex, 0);
@@ -32,7 +33,7 @@ vec4 shadeBRDF()
     coord.x = (phi_d/PI*(tSize.x-1.0) + 0.5) / tSize.x;
     coord.y = (theta_d*2/PI*(tSize.y-1.0) + 0.5) / tSize.y;
     coord.z = (theta_h*2/PI*(tSize.z-1.0) + 0.5) / tSize.z;
-    coord.x = 0.5;
+    //coord.x = 0.5;
     vec3 color = texture(brdfTex, coord).rgb;
     return vec4(d*color.rgb*3e-3+0.1, 1);
 }

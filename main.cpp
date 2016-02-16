@@ -11,9 +11,10 @@
 int main(int argc, char** argv) 
 {   
     /*ObjRenderer::init(800);
-    ObjRenderer::loadEnvMap("envmaps/tunnel.hdr", true);
+    
+    ObjRenderer::loadEnvMap("envmaps/tunnel.hdr", false);
     ObjRenderer::setShaderOutputID(0);
-    ObjRenderer::loadModel("models/M4A1/M4A1.obj");
+    ObjRenderer::loadModel("models/sphere/sphere.obj");
     Viewer::init();
     Viewer::run();
     return 0;*/

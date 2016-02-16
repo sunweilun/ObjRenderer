@@ -10,7 +10,7 @@ void ShaderDataPhong::send2shader(GLuint shaderProgID) const
             1, (float*)&ka);
     glUniform3fv(glGetUniformLocation(shaderProgID, "ks"), 
             1, (float*)&ks);
-    glUniform1f(glGetUniformLocation(shaderProgID, "shiness"), s);
+    glUniform1f(glGetUniformLocation(shaderProgID, "s"), s);
     
     ObjRenderer::useTexture("diffTex", diffTexID);
 }

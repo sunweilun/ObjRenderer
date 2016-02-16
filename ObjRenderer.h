@@ -77,8 +77,7 @@ protected:
     static GLuint renderSize;
     static GLuint vertexBufferID;
     static GLuint nTriangles;
-    static GLuint mapDiffID;
-    static GLuint mapSpecID;
+    static GLuint envmapID;
     static GLuint blankTexID;
     static GLuint forceOutputID;
     static unsigned shaderSeed;

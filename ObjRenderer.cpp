@@ -27,8 +27,7 @@ GLuint ObjRenderer::shaderProgID = 0;
 GLuint ObjRenderer::vertexBufferID = 0;
 GLuint ObjRenderer::renderSize = 512;
 GLuint ObjRenderer::nTriangles = 0;
-GLuint ObjRenderer::mapDiffID = 0;
-GLuint ObjRenderer::mapSpecID = 0;
+GLuint ObjRenderer::envmapID = 0;
 GLuint ObjRenderer::blankTexID = 0;
 unsigned ObjRenderer::shaderSeed = 0;
 unsigned ObjRenderer::shaderOutputID = 0;
@@ -85,10 +84,6 @@ void ObjRenderer::init(unsigned size)
     
     shaderProgID = loadShaders("Shader/geo.vert", fragList);
     
-    glClampColor(GL_CLAMP_READ_COLOR, GL_FALSE);
-    glClampColor(GL_CLAMP_VERTEX_COLOR, GL_FALSE);
-    glClampColor(GL_CLAMP_FRAGMENT_COLOR, GL_FALSE);
-    
     glGenTextures(1, &colorTexID);
     glBindTexture(GL_TEXTURE_2D, colorTexID);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -97,6 +92,7 @@ void ObjRenderer::init(unsigned size)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+    
     //NULL means reserve texture memory, but texels are undefined
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, renderSize, renderSize, 
             0, GL_RGBA, GL_FLOAT, NULL);
@@ -117,7 +113,9 @@ void ObjRenderer::init(unsigned size)
     glGenBuffers(1, &vertexBufferID);
     
     cv::Mat blank_image(8, 8, CV_8UC1, cv::Scalar(255));
+    
     blankTexID = makeTex(blank_image);
+    
 }
 
 GLuint ObjRenderer::makeTex(const cv::Mat& tex, bool flip)
@@ -165,6 +163,8 @@ GLuint ObjRenderer::makeTex(const cv::Mat& tex, bool flip)
         return 0;
     }
     
+    
+    
     cv::Mat texFlip;
     if(flip)
         cv::flip(tex, texFlip, 0);
@@ -180,18 +180,23 @@ GLuint ObjRenderer::makeTex(const cv::Mat& tex, bool flip)
             
             glTexImage2D(GL_TEXTURE_2D, 0, format, tex.cols, tex.rows, 0, 
                 int_format, type, texFlip.data);
+            
+            
+            float fLargest;
+            glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &fLargest);
+            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, fLargest);
+            
+            
 
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 
             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 
             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
+            
             glGenerateMipmap(GL_TEXTURE_2D);
-            break;
             
         case 3:
             glBindTexture(GL_TEXTURE_3D, textureID);
@@ -209,6 +214,8 @@ GLuint ObjRenderer::makeTex(const cv::Mat& tex, bool flip)
             glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 
             glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+            
+            glHint(GL_GENERATE_MIPMAP_HINT, GL_NICEST);
 
             glGenerateMipmap(GL_TEXTURE_3D);
             break;
@@ -238,32 +245,18 @@ void ObjRenderer::loadEnvMap(const std::string& path, bool gray)
     
     cv::pow(map, 1/2.2, map);
     
-    cv::Mat map_diff = map.clone();
-    cv::Mat map_spec = map.clone();
+    cv::Mat refMap(map.rows*3-2, map.cols, map.type());
+    map.copyTo(refMap(cv::Rect(0, map.rows-1, map.cols, map.rows)));
     
-    cv::GaussianBlur(map_diff, map_diff, 
-            cv::Size(int(map_diff.cols*0.5)*2+1, int(map_diff.rows*0.5)*2+1), 0, 0);
+    cv::flip(map, map, 0);
     
-    cv::GaussianBlur(map_spec, map_spec, 
-            cv::Size(int(map_spec.cols*0.1)*2+1, int(map_spec.rows*0.1)*2+1), 0, 0);
-    
-    
-    if(map.type() == CV_32FC3)
-    {
-        uniform_horizontal_edges<cv::Vec3f>(map_diff);
-        uniform_horizontal_edges<cv::Vec3f>(map_spec);
-    }
-    else
-    {
-        uniform_horizontal_edges<float>(map_diff);
-        uniform_horizontal_edges<float>(map_spec);
-    }
+    map.copyTo(refMap(cv::Rect(0, 0, map.cols, map.rows)));
+    map.copyTo(refMap(cv::Rect(0, 2*map.rows-2, map.cols, map.rows)));
     
     glUseProgram(shaderProgID);
-    mapDiffID = makeTex(map_diff);
-    useTexture("envmap_diff", mapDiffID);
-    mapSpecID = makeTex(map_spec);
-    useTexture("envmap_spec", mapSpecID);
+    
+    envmapID = makeTex(refMap);
+    useTexture("envmap", envmapID);
 }
 
 void ObjRenderer::useTexture(const std::string& shaderVarName, GLuint texID, GLenum type)
@@ -369,7 +362,9 @@ void ObjRenderer::loadModel(const std::string& path, bool unitize)
                 if(mat_id >= materials.size())
                     mat_id = 0;
                 
-                /*if(i1*2+1 < mesh.texcoords.size() &&
+                attr.binormal = glm::normalize(v2 - v1);
+                
+                if(i1*2+1 < mesh.texcoords.size() &&
                         i2*2+1 < mesh.texcoords.size() &&
                         i3*2+1 < mesh.texcoords.size())
                 {
@@ -378,11 +373,9 @@ void ObjRenderer::loadModel(const std::string& path, bool unitize)
                     glm::vec2 tc3 = getVec<glm::vec2>(&mesh.texcoords[i3*2]);
                     glm::vec2 tc12 = tc2 - tc1;
                     glm::vec2 tc13 = tc3 - tc1;
-                    float denom = tc13.y*tc12.x - tc12.y*tc13.x;
-                    float alpha = tc13.y / denom;
-                    float beta = -tc12.y / denom;
-                    attr.binormal = glm::normalize(alpha*(v2-v1)+beta*(v3-v1));
-                }*/
+                    attr.binormal = tc13.y*(v2-v1)-tc12.y*(v3-v1);
+                    attr.binormal = glm::normalize(attr.binormal);
+                }
                 
             }
             
@@ -499,15 +492,7 @@ void ObjRenderer::renderView()
     
     unsigned base_offset = 0;
     
-    
-    
-    useTexture("envmap_diff", mapDiffID);
-    
-    useTexture("envmap_spec", mapSpecID);
-    
-    
-    
-    
+    useTexture("envmap", envmapID);
     
     for(unsigned i=0; i<matGroupInfoList.size(); i++)
     {
@@ -521,8 +506,6 @@ void ObjRenderer::renderView()
         glDrawArrays(GL_TRIANGLES, base_offset, info.size);
         base_offset += info.size;
     }
-    
-    
     
     glPopAttrib();
     glFlush();

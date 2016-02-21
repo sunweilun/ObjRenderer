@@ -17,7 +17,8 @@ class ShaderData
 public:
     virtual void loadData(const tinyobj::material_t& mat, 
             const std::string& mtl_base_path){}
-    virtual void send2shader(GLuint shaderProgID) const{}
+    virtual void send2shader(GLuint shaderProgID) const {}
+    virtual bool transparent() const { return false; }
 };
 
 class ShaderDataPhong : public ShaderData
@@ -27,12 +28,14 @@ protected:
     glm::vec3 ka;
     glm::vec3 kd;
     glm::vec3 ks;
+    float d;
     float s;
     GLuint diffTexID;
 public:
     void send2shader(GLuint shaderProgID) const;
     void loadData(const tinyobj::material_t& mat, 
         const std::string& mtl_base_path);
+    virtual bool transparent() const { return d < 1; }
 };
 
 class ShaderDataBRDF : public ShaderData

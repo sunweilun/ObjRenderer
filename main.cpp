@@ -10,14 +10,14 @@
 
 int main(int argc, char** argv) 
 {   
-    /*ObjRenderer::init(800);
+    ObjRenderer::init(800);
     
-    ObjRenderer::loadEnvMap("envmaps/tunnel.hdr", false);
+    ObjRenderer::loadEnvMap("envmaps/envmap.hdr", false);
     ObjRenderer::setShaderOutputID(0);
-    ObjRenderer::loadModel("models/sphere/sphere.obj");
+    ObjRenderer::loadModel("models/car2/model.obj");
     Viewer::init();
     Viewer::run();
-    return 0;*/
+    return 0;
     
     Args args;
     char folderPath[1024];

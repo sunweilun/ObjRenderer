@@ -9,7 +9,7 @@
 #include "ObjRenderer.h"
 
 float theta = M_PI/4;
-float phi = M_PI/3;
+float phi = M_PI/12;
 float dist = 4;
 
 int mouse_x, mouse_y;

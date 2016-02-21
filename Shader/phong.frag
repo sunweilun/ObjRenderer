@@ -6,6 +6,7 @@ uniform uint seed;
 uniform vec3 ka;
 uniform vec3 kd;
 uniform vec3 ks;
+uniform float d;
 uniform float s;
 
 in vec3 v, n, t;
@@ -67,25 +68,45 @@ vec3 getColor(sampler2D map, vec3 dir, float s = 1.0)
     float phi = acos(clamp(dir.y, -1, 1));
     uv.x = theta / (2*PI);
     uv.y = phi / PI;
-   
+
     float delta_shininess = acos(clamp(pow(0.9, 1/s), -1, 1))/PI*2.0;
 
     float drdx = length(dFdx(dir));
     float drdy = length(dFdy(dir));
     float dr = max(drdx, drdy);
-    float da = asin(dr*0.5)*2.0/PI+delta_shininess;
+    float da = max(asin(dr*0.5)*2.0/PI, delta_shininess);
     float d_theta = da/max(sin(phi), da); 
     return textureGrad(map, vec2(uv.x, (uv.y+1.0)/3.0), 
         vec2(d_theta, 0.0), vec2(0.0, da)).rgb;
+
+}
+
+vec4 shadeGlass(float refr_idx)
+{
+    vec3 in_vec = normalize(eyePos - v);
+    vec3 out_vec = dot(n, in_vec) * n * 2 - in_vec;
+    vec3 refl_color = getColor(envmap, out_vec, 1000.0)*0.7;
+    float _cos = 1-abs(dot(in_vec, n));
+    float _cos5 = _cos*_cos;
+    _cos5 *= _cos5*_cos;
+    float r = (refr_idx-1.f)/(refr_idx+1.f);
+    r *= r;
+    float refl_ratio = r + (1-r)*_cos5;
+    refl_ratio = refl_ratio*0.5+0.5;
+    return vec4(refl_color, refl_ratio);
 }
 
 vec4 shadePhong()
 {
+    if(d < 1)
+        return shadeGlass(1.5);
     vec3 in_vec = normalize(eyePos - v);
     vec3 out_vec = dot(n, in_vec) * n * 2 - in_vec;
     vec3 c = kd * getColor(envmap, normalize(n));
     c *= texture(diffTex, t.xy).rgb;
     c += ka;
     c += ks * getColor(envmap, out_vec, s);
-    return vec4(c, 1);
+    return vec4(c, d);
 }
+
+

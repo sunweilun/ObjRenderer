@@ -49,10 +49,12 @@ public:
 protected:
     struct MatGroupInfo
     {
+        unsigned offset;
         unsigned size;
         std::shared_ptr<ShaderData> shaderData;
     };
-    static std::vector<MatGroupInfo> matGroupInfoList;
+    static std::vector<MatGroupInfo> opaqueMatGroupInfoList;
+    static std::vector<MatGroupInfo> transparentMatGroupInfoList;
     struct Attribute
     {
         glm::vec3 vertex;
@@ -61,6 +63,7 @@ protected:
         glm::vec3 binormal;
     };
     static void render();
+    static void sortMatGroupTriangles(const MatGroupInfo& info);
     static glm::vec3 eyePos, eyeFocus, eyeUp;
     static void renderView();
     static void clearTextures();

@@ -521,7 +521,6 @@ void ObjRenderer::renderView()
     glDisable(GL_BLEND);
     glDisable(GL_CULL_FACE); 
     glPopAttrib();
-    glFlush();
 }
 
 template<typename T> void quicksort(T a[], const int size)

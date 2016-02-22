@@ -641,7 +641,7 @@ void ObjRenderer::render()
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glUseProgram(0);
-
+    
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, colorTexID);
     glEnable(GL_TEXTURE_2D);
@@ -653,10 +653,10 @@ void ObjRenderer::render()
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
     glColor4f(1, 1, 1, 1);
 
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    
     glBegin(GL_QUADS);
     glTexCoord2f(0, 0);
     glVertex2f(0, 0);

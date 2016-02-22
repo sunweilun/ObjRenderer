@@ -266,7 +266,10 @@ void ObjRenderer::loadEnvMap(const std::string& path, bool gray)
     {
         mipmap.push_back(map);
         cv::pyrDown(map, map);
-        map = filter_envmap<cv::Vec3f>(map);
+        if(gray)
+            map = filter_envmap<float>(map);
+        else
+            map = filter_envmap<cv::Vec3f>(map);
     }
 
     glUseProgram(shaderProgID);

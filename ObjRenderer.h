@@ -41,6 +41,7 @@ public:
     static void setEyeFocus(const glm::vec3& focus) { eyeFocus = focus; }
     static void setEyePos(const glm::vec3& pos) { eyePos = pos; }
     static cv::Mat4f genShading();
+    static void setReverseNormals(bool reverse) { reverseNormals = reverse; }
     static void setShaderOutputID(int id) 
     { 
         shaderOutputID = id;
@@ -67,7 +68,11 @@ protected:
     static glm::vec3 eyePos, eyeFocus, eyeUp;
     static void renderView();
     static void clearTextures();
-    static GLuint makeTex(const cv::Mat& tex, bool flip = true);
+    static GLuint makeTex(const cv::Mat& tex, bool flip = true) 
+    { 
+        return makeTex(std::vector<cv::Mat>(1, tex), flip); 
+    }
+    static GLuint makeTex(const std::vector<cv::Mat>& mipmap, bool flip = true);
     static GLuint getTexID(const std::string& path, bool flip = true);
     static std::shared_ptr<ShaderData> makeMaterial(const tinyobj::material_t& mat, 
         const std::string& mtl_base_path);
@@ -86,6 +91,7 @@ protected:
     static unsigned shaderSeed;
     static unsigned shaderOutputID;
     static bool flipNormals;
+    static bool reverseNormals;
     static bool faceNormals;
     static std::unordered_map<std::string, GLuint> shaderTexName2texUnit;
     static std::unordered_map<std::string, GLuint> texPath2texID;

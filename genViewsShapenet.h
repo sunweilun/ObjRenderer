@@ -27,6 +27,7 @@ struct Args
     bool output_coord;
     unsigned render_size;
     unsigned output_size;
+    bool reverse_normals;
 };
 
 void processModel(const std::string& rootPath, 
@@ -149,6 +150,7 @@ void genViews(const std::string envPath, const std::string& folderPath, const Ar
 {
     ObjRenderer::init(args.render_size);
     ObjRenderer::loadEnvMap(envPath, true);
+    ObjRenderer::setReverseNormals(args.reverse_normals);
     
     glutHideWindow();
     

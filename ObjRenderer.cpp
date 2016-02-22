@@ -33,6 +33,7 @@ unsigned ObjRenderer::shaderSeed = 0;
 unsigned ObjRenderer::shaderOutputID = 0;
 bool ObjRenderer::flipNormals = false;
 bool ObjRenderer::faceNormals = false;
+bool ObjRenderer::reverseNormals = false;
 std::vector<ObjRenderer::MatGroupInfo> ObjRenderer::opaqueMatGroupInfoList;
 std::vector<ObjRenderer::MatGroupInfo> ObjRenderer::transparentMatGroupInfoList;
 std::vector<glm::vec3> ObjRenderer::vertices;
@@ -119,7 +120,7 @@ void ObjRenderer::init(unsigned size)
 
 }
 
-GLuint ObjRenderer::makeTex(const cv::Mat& tex, bool flip)
+GLuint ObjRenderer::makeTex(const std::vector<cv::Mat>& mipmap, bool flip)
 {
     GLuint textureID;
 
@@ -130,7 +131,7 @@ GLuint ObjRenderer::makeTex(const cv::Mat& tex, bool flip)
     GLenum type = 0;
 
     GLint swizzleMask[] = {GL_RED, GL_GREEN, GL_BLUE, GL_ALPHA};
-    switch (tex.type())
+    switch (mipmap.front().type())
     {
         case CV_8UC4:
             type = GL_UNSIGNED_BYTE;
@@ -164,30 +165,31 @@ GLuint ObjRenderer::makeTex(const cv::Mat& tex, bool flip)
             return 0;
     }
 
-
-
-    cv::Mat texFlip;
-    if (flip)
-        cv::flip(tex, texFlip, 0);
-    else
-        texFlip = tex;
-
-    switch (tex.dims)
+    switch (mipmap.front().dims)
     {
         case 2:
             glBindTexture(GL_TEXTURE_2D, textureID);
 
             glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
 
-            glTexImage2D(GL_TEXTURE_2D, 0, format, tex.cols, tex.rows, 0,
-                    int_format, type, texFlip.data);
-
+            for(int i=0; i<mipmap.size(); i++)
+            {
+                const cv::Mat& tex = mipmap[i];
+                cv::Mat texFlip;
+                if (flip)
+                    cv::flip(tex, texFlip, 0);
+                else
+                    texFlip = tex;
+                glTexImage2D(GL_TEXTURE_2D, i, format, tex.cols, tex.rows, 0,
+                        int_format, type, texFlip.data);
+            }
+            
+            if(mipmap.size() > 1)
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, mipmap.size()-1);
 
             float fLargest;
             glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &fLargest);
             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, fLargest);
-
-
 
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -197,15 +199,25 @@ GLuint ObjRenderer::makeTex(const cv::Mat& tex, bool flip)
 
             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-            glGenerateMipmap(GL_TEXTURE_2D);
+            if(mipmap.size() == 1)
+                glGenerateMipmap(GL_TEXTURE_2D);
 
         case 3:
             glBindTexture(GL_TEXTURE_3D, textureID);
 
             glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
 
-            glTexImage3D(GL_TEXTURE_3D, 0, format, tex.size[2], tex.size[1], tex.size[0], 0,
+            for(int i=0; i<mipmap.size(); i++)
+            {
+                const cv::Mat& tex = mipmap[i];
+                cv::Mat texFlip;
+                if (flip)
+                    cv::flip(tex, texFlip, 0);
+                else
+                    texFlip = tex;
+                glTexImage3D(GL_TEXTURE_3D, i, format, tex.size[2], tex.size[1], tex.size[0], 0,
                     int_format, type, texFlip.data);
+            }
 
             glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -216,9 +228,8 @@ GLuint ObjRenderer::makeTex(const cv::Mat& tex, bool flip)
 
             glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-            glHint(GL_GENERATE_MIPMAP_HINT, GL_NICEST);
-
-            glGenerateMipmap(GL_TEXTURE_3D);
+            if(mipmap.size() == 1)
+                glGenerateMipmap(GL_TEXTURE_3D);
             break;
     }
 
@@ -244,17 +255,25 @@ void ObjRenderer::loadEnvMap(const std::string& path, bool gray)
     }
 
     cv::pow(map, 1 / 2.2, map);
-
-    cv::Mat refMap(map.rows * 3 - 2, map.cols, map.type());
-    map.copyTo(refMap(cv::Rect(0, 0, map.cols, map.rows)));
-    map.copyTo(refMap(cv::Rect(0, 2 * map.rows - 2, map.cols, map.rows)));
     
-    cv::flip(map, map, 0);
-    map.copyTo(refMap(cv::Rect(0, map.rows - 1, map.cols, map.rows)));
+    int w=1, h=1;
+    while(w<map.cols) w <<= 1;
+    while(h<map.rows) h <<= 1;
+    cv::resize(map, map, cv::Size(w, h));
+    
+    std::vector<cv::Mat> mipmap;
+    for(int i=1; (1<<(i+1)) < std::min(w, h); i++)
+    {
+        mipmap.push_back(map);
+        cv::pyrDown(map, map);
+        map = filter_envmap<cv::Vec3f>(map);
+    }
 
     glUseProgram(shaderProgID);
 
-    envmapID = makeTex(refMap);
+    envmapID = makeTex(mipmap);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+    
     useTexture("envmap", envmapID);
 }
 
@@ -381,7 +400,8 @@ void ObjRenderer::loadModel(const std::string& path, bool unitize)
             if (!faceNormals && vert_index * 3 + 2 < mesh.normals.size())
             {
                 attr.normal = getVec<glm::vec3>(&mesh.normals[vert_index * 3]);
-                std::swap(attr.normal.x, attr.normal.z);
+                if(reverseNormals)
+                    std::swap(attr.normal.x, attr.normal.z);
                 if (flipNormals)
                     attr.normal = -attr.normal;
             }

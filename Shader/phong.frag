@@ -41,14 +41,6 @@ mat3 rotationMatrix(vec3 axis, float angle)
                 oc * axis.z * axis.x - axis.y * s,  oc * axis.y * axis.z + axis.x * s,  oc * axis.z * axis.z + c);
 }
 
-vec2 wrapTexdiff(vec2 diff)
-{
-	vec2 result = diff;
-	if(diff.x > 0.5) result.x = 1.0-diff.x;
-	if(diff.y > 0.5) result.y = 1.0-diff.y;
-	return result;
-}
-
 vec3 getColor(sampler2D map, vec3 dir, float s = 1.0) 
 {
     uint local_seed = next_rand(seed);
@@ -75,10 +67,10 @@ vec3 getColor(sampler2D map, vec3 dir, float s = 1.0)
     float drdy = length(dFdy(dir));
     float dr = max(drdx, drdy);
     float da = max(asin(dr*0.5)*2.0/PI, delta_shininess);
-    float d_theta = da/max(sin(phi), da); 
-    return textureGrad(map, vec2(uv.x, (uv.y+1.0)/3.0), 
-        vec2(d_theta, 0.0), vec2(0.0, da)).rgb;
-
+    ivec2 size = textureSize(map, 0);
+    da *= sqrt(float(size.x*size.y));
+    float mml = max(log2(da), 0);
+    return textureLod(map, vec2(uv.x, uv.y), mml).rgb;
 }
 
 vec4 shadeGlass(float refr_idx)
@@ -101,11 +93,12 @@ vec4 shadePhong()
     if(d < 1)
         return shadeGlass(1.5);
     vec3 in_vec = normalize(eyePos - v);
-    vec3 out_vec = dot(n, in_vec) * n * 2 - in_vec;
-    vec3 c = kd * getColor(envmap, normalize(n));
+    vec3 normal = normalize(n);
+    vec3 out_vec = dot(normal, in_vec) * normal * 2 - in_vec;
+    vec3 c = kd * getColor(envmap, normal);
     c *= texture(diffTex, t.xy).rgb;
     c += ka;
-    c += ks * getColor(envmap, out_vec, s);
+    c += ks * getColor(envmap, normalize(out_vec), s);
     return vec4(c, d);
 }
 

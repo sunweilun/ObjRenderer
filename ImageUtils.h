@@ -90,33 +90,40 @@ cv::Mat fi2mat(FIBITMAP* src)
             }
         }
     }
-
-    cv::flip(dst, dst, 0);
     return dst.clone();
 }
 
-template<typename T> void uniform_horizontal_edges(cv::Mat& mat)
+template<typename T> 
+cv::Mat filter_envmap(const cv::Mat& map)
 {
-    T top;
-    T bottom;
-    for(int i=0; i<mat.cols; i++)
+    cv::Mat filtered;
+    map.copyTo(filtered);
+    for(unsigned i=0; i<map.rows; i++)
     {
-        top += mat.at<T>(0, i);
-        bottom += mat.at<T>(mat.rows-1, i);
-    }
-    top /= mat.cols;
-    bottom /= mat.cols;
-    
-    for(int i=0; i<mat.cols; i++)
-    {
-        T diff_top = top - mat.at<T>(0, i);
-        T diff_bottom = bottom - mat.at<T>(mat.rows-1, i);
-        for(int j=0; j<mat.rows; j++)
+        float sin_phi = sin(i/float(map.rows-1)*M_PI);
+        int filter_len = map.cols; 
+        if(sin_phi*map.cols > 1.0)
+            filter_len = int(1.0/sin_phi);
+        filtered.at<T>(i, 0) = 0;
+        for(int j=0; j<filter_len; j++)
         {
-            float ratio = j / float(mat.rows - 1);
-            mat.at<T>(j, i) += (1-ratio)*diff_top + ratio*diff_bottom;
+            int index = j-filter_len/2;
+            if(index < 0) index += map.cols;
+            if(index >= map.cols) index -= map.cols;
+            filtered.at<T>(i, 0) += map.at<T>(i, index)/filter_len;
+        }
+        for(int j=1; j<map.cols; j++)
+        {
+            filtered.at<T>(i, j) = filtered.at<T>(i, j-1);
+            int index = j+filter_len-filter_len/2-1;
+            if(index >= map.cols) index -= int(map.cols);
+            filtered.at<T>(i, j) += map.at<T>(i, index)/filter_len;
+            index = j-filter_len/2-1;
+            if(index < 0) index += int(map.cols);
+            filtered.at<T>(i, j) -= map.at<T>(i, index)/filter_len;
         }
     }
+    return filtered;
 }
 
 cv::Mat loadImage(const std::string& path)
@@ -160,17 +167,6 @@ cv::Mat loadImage(const std::string& path)
                 }
             }
         }
-        
-        /*cv::Mat3f part(900, 900);
-        for(int i=0; i<900; i++)
-            for(int j=0; j<900; j++)
-                part.at<cv::Vec3f>(i, j) = image.at<cv::Vec3f>((i/10)*90+(j/10), 90);
-        
-        cv::namedWindow("image");
-        cv::imshow("image", part*100.0);
-        cv::waitKey();*/
-        
-        //cv::flip(image, image, 0);
         
         fclose(file);
     }

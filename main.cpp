@@ -10,14 +10,14 @@
 
 int main(int argc, char** argv) 
 {   
-    ObjRenderer::init(800);
-    
-    ObjRenderer::loadEnvMap("envmaps/envmap.hdr", false);
+    /*ObjRenderer::init(800);
+    ObjRenderer::setReverseNormals(true);
+    ObjRenderer::loadEnvMap("envmaps/exhall.hdr", false);
     ObjRenderer::setShaderOutputID(0);
     ObjRenderer::loadModel("models/car2/model.obj");
     Viewer::init();
     Viewer::run();
-    return 0;
+    return 0;*/
     
     Args args;
     char folderPath[1024];
@@ -39,6 +39,7 @@ int main(int argc, char** argv)
     fscanf(file, "output_coord = %d\n", &args.output_coord);
     fscanf(file, "render_size = %d\n", &args.render_size);
     fscanf(file, "output_size = %d\n", &args.output_size);
+    fscanf(file, "reverse_normals = %d\n", &args.reverse_normals);
     fscanf(file, "brightness = %f\n", &args.brightness);
     fclose(file);
     

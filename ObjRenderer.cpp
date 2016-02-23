@@ -48,7 +48,10 @@ GLuint ObjRenderer::getTexID(const std::string& path, bool flip)
     if (texPath2texID.find(path) == texPath2texID.end())
     {
         cv::Mat image = loadImage(path);
-        texPath2texID[path] = makeTex(image, flip);
+        if(image.dims == 0)
+            texPath2texID[path] = 0;
+        else
+            texPath2texID[path] = makeTex(image, flip);
     }
     return texPath2texID[path];
 }

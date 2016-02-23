@@ -149,7 +149,7 @@ findModelsInFolder(const std::string& root, std::vector<std::pair<std::string, s
 void genViews(const std::string envPath, const std::string& folderPath, const Args& args)
 {
     ObjRenderer::init(args.render_size);
-    ObjRenderer::loadEnvMap(envPath, true);
+    ObjRenderer::loadEnvMap(envPath, false);
     ObjRenderer::setReverseNormals(args.reverse_normals);
     
     glutHideWindow();

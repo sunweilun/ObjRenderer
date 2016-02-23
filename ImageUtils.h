@@ -137,6 +137,8 @@ cv::Mat loadImage(const std::string& path)
     {
         fip_map.load(path.c_str());
         image = fi2mat(fip_map);
+        if(path.substr(path.length()-3, 3) == "tga")
+            cv::flip(image, image, 0);
     }
     else if(path.substr(path.length()-6, 6) == "binary") // read brdf file
     {

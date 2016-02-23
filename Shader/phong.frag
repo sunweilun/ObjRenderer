@@ -77,7 +77,7 @@ vec4 shadeGlass(float refr_idx)
 {
     vec3 in_vec = normalize(eyePos - v);
     vec3 out_vec = dot(n, in_vec) * n * 2 - in_vec;
-    vec3 refl_color = getColor(envmap, out_vec, 1000.0)*0.7;
+    vec3 refl_color = getColor(envmap, out_vec, 1e5)*0.1;
     float _cos = 1-abs(dot(in_vec, n));
     float _cos5 = _cos*_cos;
     _cos5 *= _cos5*_cos;

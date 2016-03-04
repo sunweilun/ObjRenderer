@@ -501,7 +501,7 @@ void ObjRenderer::renderView()
     glm::vec3 right = glm::normalize(glm::cross(front, eyeUp));
     glm::vec3 rectUp = glm::cross(right, front);
 
-    glm::mat4 projMat = glm::perspective<float>(30, 1, 0.01, 100);
+    glm::mat4 projMat = glm::perspective<float>(30*M_PI/180.0, 1, 0.01, 100);
 
     glUniformMatrix4fv(glGetUniformLocation(shaderProgID, "projMat"),
             1, false, (float*) &projMat);

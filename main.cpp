@@ -12,9 +12,9 @@ int main(int argc, char** argv)
 {   
     /*ObjRenderer::init(800);
     ObjRenderer::setReverseNormals(true);
-    ObjRenderer::loadEnvMap("envmaps/exhall.hdr", false);
+    ObjRenderer::loadEnvMap("envmaps/warehouse.hdr", false);
     ObjRenderer::setShaderOutputID(0);
-    ObjRenderer::loadModel("models/car2/model.obj");
+    ObjRenderer::loadModel("models/car1/model.obj");
     Viewer::init();
     Viewer::run();
     return 0;*/

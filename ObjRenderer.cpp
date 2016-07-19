@@ -11,6 +11,7 @@
 #include "ShaderUtils.h"
 #include "ShaderData.h"
 #include "ObjRenderer.h"
+#define GLM_FORCE_RADIANS
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 #include <bits/unordered_map.h>
